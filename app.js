@@ -2,21 +2,125 @@ const COLORS=["#e07a5f","#3d8eb9","#81b29a","#f2cc8f","#9c6ade","#e9a03b","#5bb5
 const $=id=>document.getElementById(id);
 const STORE="plandecorte:v2";
 
+const ICONS={
+  print:'<path d="M6 9V2h12v7"/><path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"/><rect x="6" y="14" width="12" height="8"/>',
+  download:'<path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><path d="m7 10 5 5 5-5"/><path d="M12 15V3"/>',
+  ruler:'<path d="M21.3 15.3a2.4 2.4 0 0 1 0 3.4l-2.6 2.6a2.4 2.4 0 0 1-3.4 0L2.7 8.7a2.4 2.4 0 0 1 0-3.4l2.6-2.6a2.4 2.4 0 0 1 3.4 0Z"/><path d="m7.5 10.5 2-2M10.5 13.5l2-2M13.5 16.5l2-2"/>',
+  edit:'<path d="M12 20h9"/><path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4Z"/>',
+};
+const icon=k=>`<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${ICONS[k]}</svg>`;
+const isMobile=()=>matchMedia("(max-width:860px)").matches;
+
+// ---------- avisos ----------
+function toast(msg,{type="info",action=null,timeout=5000}={}){
+  const el=document.createElement("div");
+  el.className=`toast ${type}`;
+  el.innerHTML=`<span>${esc(msg)}</span>${action?`<button class="act">${esc(action.label)}</button>`:""}<button class="close" aria-label="Cerrar aviso">×</button>`;
+  const close=()=>el.remove();
+  el.querySelector(".close").onclick=close;
+  if(action)el.querySelector(".act").onclick=()=>{action.fn();close()};
+  $("toasts").appendChild(el);
+  while($("toasts").children.length>3)$("toasts").firstElementChild.remove();
+  if(timeout)setTimeout(close,timeout);
+  return el;
+}
+
 // ---------- piezas (UI) ----------
-function addRow(p={name:"",w:"",h:"",q:1,g:false}){
+function addRow(p={name:"",w:"",h:"",q:1,g:false},before=null){
   const tr=document.createElement("tr");
   tr.innerHTML=`<td><span class="sw"></span></td>
-    <td><input type="text" class="n" value="${esc(p.name)}" placeholder="Pieza"></td>
-    <td><input type="number" class="w" value="${esc(p.w)}" min="1"></td>
-    <td><input type="number" class="h" value="${esc(p.h)}" min="1"></td>
-    <td><input type="number" class="q" value="${esc(p.q)}" min="1" style="width:52px"></td>
+    <td><input type="text" class="n" value="${esc(p.name)}" placeholder="Pieza" autocomplete="off"></td>
+    <td><input type="number" class="w" value="${esc(p.w)}" min="1" inputmode="numeric" aria-describedby="rows-err"></td>
+    <td><input type="number" class="h" value="${esc(p.h)}" min="1" inputmode="numeric" aria-describedby="rows-err"></td>
+    <td><input type="number" class="q" value="${esc(p.q)}" min="1" inputmode="numeric" aria-describedby="rows-err"></td>
     <td class="c"><input type="checkbox" class="g" ${p.g?"checked":""}></td>
-    <td><button class="x" title="Quitar">×</button></td>`;
-  tr.querySelector(".x").onclick=()=>{tr.remove();recolor();save()};
-  tr.querySelectorAll("input").forEach(i=>i.addEventListener("input",save));
-  $("rows").appendChild(tr);recolor();
+    <td><button class="x">×</button></td>`;
+  tr.querySelector(".x").onclick=()=>removeRow(tr);
+  tr.querySelectorAll("input").forEach(i=>{
+    i.addEventListener("input",()=>{save();validate()});
+    // Enter salta a la pieza siguiente (o crea una nueva al final)
+    if(i.type!=="checkbox")i.addEventListener("keydown",e=>{
+      if(e.key!=="Enter"||e.ctrlKey||e.metaKey)return;
+      e.preventDefault();
+      const next=tr.nextElementSibling;
+      if(next)next.querySelector(".n").focus();
+      else{addRow();save();$("rows").lastElementChild.querySelector(".n").focus()}
+    });
+  });
+  $("rows").insertBefore(tr,before);refreshRows();
+  return tr;
 }
-function recolor(){[...$("rows").children].forEach((tr,i)=>tr.querySelector(".sw").style.background=COLORS[i%COLORS.length])}
+function removeRow(tr){
+  const rows=$("rows"), idx=[...rows.children].indexOf(tr);
+  const data=rowData(tr), label=data.name.trim()||`Pieza ${idx+1}`;
+  // mover el foco antes de quitar la fila para no perderlo
+  const focusTo=tr.nextElementSibling||tr.previousElementSibling;
+  tr.remove();refreshRows();save();validate();
+  (focusTo?focusTo.querySelector(".x"):$("add")).focus();
+  toast(`«${label}» eliminada`,{action:{label:"Deshacer",fn:()=>{
+    const r=addRow(data,rows.children[idx]||null);save();validate();r.querySelector(".n").focus();
+  }},timeout:7000});
+}
+function rowData(tr){
+  return {name:tr.querySelector(".n").value,w:tr.querySelector(".w").value,h:tr.querySelector(".h").value,q:tr.querySelector(".q").value,g:tr.querySelector(".g").checked};
+}
+function refreshRows(){
+  [...$("rows").children].forEach((tr,i)=>{
+    const n=i+1;
+    tr.querySelector(".sw").style.background=COLORS[i%COLORS.length];
+    tr.querySelector(".n").setAttribute("aria-label",`Nombre de la pieza ${n}`);
+    tr.querySelector(".w").setAttribute("aria-label",`Ancho de la pieza ${n} en mm`);
+    tr.querySelector(".h").setAttribute("aria-label",`Alto de la pieza ${n} en mm`);
+    tr.querySelector(".q").setAttribute("aria-label",`Cantidad de la pieza ${n}`);
+    tr.querySelector(".g").setAttribute("aria-label",`Respetar veta en la pieza ${n}`);
+    tr.querySelector(".x").setAttribute("aria-label",`Quitar pieza ${n}`);
+    tr.querySelector(".x").title="Quitar";
+  });
+}
+
+// ---------- validación ----------
+// Los campos vacíos sólo se marcan después del primer intento de calcular.
+let attempted=false;
+function setErr(input,msg,errEl){
+  input.setAttribute("aria-invalid",msg?"true":"false");
+  if(errEl)errEl.textContent=msg||"";
+}
+function validate(){
+  const errs=[];
+  const num=id=>$(id).value.trim()===""?null:+$(id).value;
+  const field=(id,msg)=>{setErr($(id),msg,$(id+"-err"));if(msg)errs.push($(id))};
+  const W=num("bw"), H=num("bh"), kerf=num("kerf"), margin=num("margin"), maxb=num("maxb");
+  field("bw",W==null?(attempted?"Indicá el ancho":""):W>0?"":"Debe ser mayor a 0");
+  field("bh",H==null?(attempted?"Indicá el alto":""):H>0?"":"Debe ser mayor a 0");
+  field("kerf",kerf!=null&&kerf<0?"No puede ser negativo":"");
+  const mErr=margin!=null&&margin<0?"No puede ser negativo":
+    margin>0&&W>0&&H>0&&(2*margin>=W||2*margin>=H)?"Es mayor que el tablero":"";
+  field("margin",mErr);
+  field("maxb",maxb!=null&&!(Number.isInteger(maxb)&&maxb>=1)?"Entero desde 1":"");
+
+  const uw=(W||0)-2*(margin||0), uh=(H||0)-2*(margin||0), grain=$("grain").checked;
+  const rowMsgs=[];
+  [...$("rows").children].forEach((tr,i)=>{
+    const d=rowData(tr), w=d.w===""?null:+d.w, h=d.h===""?null:+d.h, q=d.q===""?null:+d.q;
+    const label=d.name.trim()||`Pieza ${i+1}`;
+    const blank=w==null&&h==null&&!d.name.trim();
+    let wErr=false,hErr=false,msg="";
+    if(blank){}
+    else if(w==null||h==null){wErr=w==null&&attempted;hErr=h==null&&attempted;if(attempted)msg=`${label}: falta ${w==null?"el ancho":"el alto"}`}
+    else if(!(w>0)||!(h>0)){wErr=!(w>0);hErr=!(h>0);msg=`${label}: las medidas deben ser mayores a 0`}
+    else if(uw>0&&uh>0){
+      const fits=(w<=uw&&h<=uh)||(!(grain&&d.g)&&h<=uw&&w<=uh);
+      if(!fits){wErr=hErr=true;msg=`${label} (${w}×${h}) no entra en el tablero${grain&&d.g?" respetando la veta":""}`}
+    }
+    const qErr=q!=null&&!(Number.isInteger(q)&&q>=1);
+    if(qErr&&!msg)msg=`${label}: la cantidad debe ser un entero desde 1`;
+    setErr(tr.querySelector(".w"),wErr?msg:"");setErr(tr.querySelector(".h"),hErr?msg:"");setErr(tr.querySelector(".q"),qErr?msg:"");
+    tr.classList.toggle("bad",!!msg);
+    if(msg){rowMsgs.push(msg);errs.push(tr.querySelector(wErr?".w":hErr?".h":".q"))}
+  });
+  $("rows-err").textContent=rowMsgs.join(" · ");
+  return errs;
+}
 function esc(s){return String(s??"").replace(/[&<>"]/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]))}
 function readPieces(){
   return [...$("rows").children].map((tr,i)=>({
@@ -32,7 +136,7 @@ function readCfg(){
 }
 function save(){
   try{localStorage.setItem(STORE,JSON.stringify({project:$("project").value,cfg:{bw:$("bw").value,bh:$("bh").value,kerf:$("kerf").value,margin:$("margin").value,maxb:$("maxb").value,grain:$("grain").checked},
-    rows:[...$("rows").children].map(tr=>({name:tr.querySelector(".n").value,w:tr.querySelector(".w").value,h:tr.querySelector(".h").value,q:tr.querySelector(".q").value,g:tr.querySelector(".g").checked}))}))}catch(e){}
+    rows:[...$("rows").children].map(rowData)}))}catch(e){}
 }
 function load(){
   let s=null;try{s=JSON.parse(localStorage.getItem(STORE))}catch(e){}
@@ -132,14 +236,28 @@ function optimize(pieces,cfg){
 // ---------- render ----------
 let lastResult=null;
 function calculate(){
+  attempted=true;
+  const errs=validate();
+  if(errs.length){
+    toast(errs.length===1?"Revisá el campo marcado.":`Revisá los ${errs.length} campos marcados.`,{type:"error"});
+    errs[0].focus();return;
+  }
   const cfg=readCfg(), pieces=readPieces();
-  if(!(cfg.W>0&&cfg.H>0)){alert("Indica el ancho y alto del tablero.");return}
-  if(cfg.W-2*cfg.margin<=0||cfg.H-2*cfg.margin<=0){alert("El margen es mayor que el tablero.");return}
-  if(!pieces.length){alert("Añade al menos una pieza.");return}
+  if(!pieces.length){
+    toast("Añadí al menos una pieza con ancho y alto.",{type:"error"});
+    if(!$("rows").children.length)addRow();
+    $("rows").lastElementChild.querySelector(".n").focus();return;
+  }
   const t0=performance.now();
   const r=optimize(pieces,cfg);
   r.ms=performance.now()-t0;r.cfg=cfg;r.pieces=pieces;
   lastResult=r;render(r);save();
+  const used=r.boards.reduce((s,b)=>s+b.placed.reduce((a,p)=>a+p.w*p.h,0),0);
+  const pct=r.boards.length?used/(r.boards.length*cfg.W*cfg.H)*100:0;
+  toast(`Plan listo: ${r.boards.length} tablero${r.boards.length===1?"":"s"}, ${pct.toFixed(1)}% de aprovechamiento${r.unplaced.length?` · ${r.unplaced.length} sin colocar`:""}.`,{type:r.unplaced.length?"error":"info",timeout:4000});
+  // en el celular el resultado queda debajo del formulario: llevar al usuario hasta él
+  // (el foco va primero y el scroll en el frame siguiente; si no, Chrome cancela el scroll suave)
+  if(isMobile()){$("out").focus({preventScroll:true});requestAnimationFrame(()=>$("out").scrollIntoView({behavior:"smooth",block:"start"}))}
 }
 function render(r){
   const {cfg}=r, boardArea=cfg.W*cfg.H;
@@ -160,24 +278,26 @@ function render(r){
     <div class="stat"><b>${(used/1e6).toFixed(2)} m²</b><span>Superficie útil</span></div>
   </div>
   <div class="toolbar">
-    <button id="print">🖨 Imprimir / PDF</button>
-    <button id="exportCsv">⬇ Exportar lista de cortes (CSV)</button>
-    <button id="lbl">${showLabels?"Ocultar":"Mostrar"} medidas</button>
+    <button class="edit" id="editBtn">${icon("edit")}Editar piezas</button>
+    <button id="print">${icon("print")}Imprimir / PDF</button>
+    <button id="exportCsv">${icon("download")}Exportar cortes (CSV)</button>
+    <button id="lbl" aria-pressed="${showLabels}">${icon("ruler")}${showLabels?"Ocultar":"Mostrar"} medidas</button>
   </div>`;
   if($("project").value)h=`<h2 style="margin-top:0">${esc($("project").value)}</h2>`+h;
   r.boards.forEach((b,i)=>{
     const u=b.placed.reduce((a,p)=>a+p.w*p.h,0);
     h+=`<div class="sheet"><h3>Tablero ${i+1} <small>${cfg.W} × ${cfg.H} mm · ${b.placed.length} piezas · ${(u/boardArea*100).toFixed(1)}% aprovechado</small></h3>
       ${boardSVG(b,cfg,i)}
-      <table class="list"><thead><tr><th>#</th><th>Pieza</th><th>Medida</th><th>Posición (x,y)</th><th>Rotada</th></tr></thead><tbody>
+      <div class="tablewrap"><table class="list"><caption class="sr-only">Piezas del tablero ${i+1}</caption><thead><tr><th scope="col">#</th><th scope="col">Pieza</th><th scope="col">Medida</th><th scope="col">Posición (x,y)</th><th scope="col">Rotada</th></tr></thead><tbody>
       ${b.placed.map((p,j)=>`<tr><td>${j+1}</td><td><span class="sw" style="background:${p.item.color}"></span>${esc(p.item.name)}</td><td>${p.item.w} × ${p.item.h}</td><td>${p.x+cfg.margin}, ${p.y+cfg.margin}</td><td>${p.rot?"↻ sí":"—"}</td></tr>`).join("")}
-      </tbody></table></div>`;
+      </tbody></table></div></div>`;
   });
   h+=`<div class="hint">Calculado en ${r.ms.toFixed(0)} ms · mejor estrategia: ${r.algo}</div>`;
   $("out").innerHTML=h;
   $("print").onclick=()=>window.print();
   $("exportCsv").onclick=exportCSV;
-  $("lbl").onclick=()=>{showLabels=!showLabels;render(r)};
+  $("lbl").onclick=()=>{showLabels=!showLabels;render(r);$("lbl").focus()};
+  $("editBtn").onclick=()=>{$("pieces-title").scrollIntoView({behavior:"smooth"});($("rows").querySelector(".n")||$("add")).focus({preventScroll:true})};
 }
 let showLabels=true;
 function boardSVG(b,cfg,i){
@@ -225,18 +345,24 @@ function exportCSV(){
 }
 
 // ---------- eventos ----------
-$("add").onclick=()=>{addRow();save();$("rows").lastElementChild.querySelector(".n").focus()};
+const addAndFocus=()=>{addRow();save();$("rows").lastElementChild.querySelector(".n").focus()};
+$("add").onclick=addAndFocus;
+$("emptyAdd").onclick=()=>{addAndFocus();$("pieces-title").scrollIntoView({behavior:"smooth"})};
 $("calc").onclick=calculate;
 $("importBtn").onclick=()=>{
   const lines=$("csv").value.split(/\r?\n/).map(l=>l.trim()).filter(Boolean);
+  if(!lines.length){toast("Pegá al menos una línea en el cuadro de CSV.",{type:"error"});$("csv").focus();return}
   let n=0;
   for(const l of lines){
     const c=l.split(/[;,\t]/).map(s=>s.trim());
-    if(c.length<3||isNaN(+c[1])||isNaN(+c[2]))continue;
+    if(c.length<3||!(+c[1]>0)||!(+c[2]>0))continue;
     addRow({name:c[0],w:+c[1],h:+c[2],q:parseInt(c[3])||1,g:/^(1|si|sí|true|v)$/i.test(c[4]||"")});n++;
   }
-  if(!n)alert("No se encontró ninguna línea válida.");else{$("csv").value="";save()}
+  const skipped=lines.length-n;
+  if(!n){toast("No se encontró ninguna línea válida. Formato: nombre,ancho,alto,cantidad",{type:"error",timeout:7000});return}
+  $("csv").value="";save();validate();
+  toast(`Se importaron ${n} pieza${n===1?"":"s"}${skipped?` · ${skipped} línea${skipped===1?"":"s"} ignorada${skipped===1?"":"s"}`:""}.`,{type:skipped?"error":"info"});
 };
-["project","bw","bh","kerf","margin","maxb","grain"].forEach(id=>$(id).addEventListener("input",save));
+["project","bw","bh","kerf","margin","maxb","grain"].forEach(id=>$(id).addEventListener("input",()=>{save();validate()}));
 document.addEventListener("keydown",e=>{if((e.ctrlKey||e.metaKey)&&e.key==="Enter"){e.preventDefault();calculate()}});
-load();
+load();validate();

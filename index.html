@@ -52,84 +52,10 @@
   ]
 }
 </script>
-<style>
-:root{
-  --bg:#f4f1ea; --panel:#fbfaf6; --ink:#1d1b18; --muted:#6f6a60; --line:#d9d3c6;
-  --accent:#d4552a; --accent-ink:#fff; --board:#efe6d4; --board-edge:#8a7a5c;
-  --waste:repeating-linear-gradient(45deg,#e3d9c4 0 4px,#efe6d4 4px 8px);
-  --header:#1d1b18; --header-ink:#f4f1ea;
-}
-@media (prefers-color-scheme: dark){
-  :root:not([data-theme="light"]){
-    --bg:#191714; --panel:#22201c; --ink:#ece7dc; --muted:#a39d90; --line:#3a362f;
-    --board:#3a3226; --board-edge:#b49c70; --header:#0f0e0c; --header-ink:#ece7dc;
-  }
-}
-:root[data-theme="dark"]{
-  --bg:#191714; --panel:#22201c; --ink:#ece7dc; --muted:#a39d90; --line:#3a362f;
-  --board:#3a3226; --board-edge:#b49c70; --header:#0f0e0c; --header-ink:#ece7dc;
-}
-*{box-sizing:border-box}
-body{margin:0;background:var(--bg);color:var(--ink);font:14px/1.45 ui-sans-serif,system-ui,-apple-system,"Segoe UI",sans-serif}
-header{background:var(--header);color:var(--header-ink);padding:14px 16px;display:flex;align-items:center;gap:16px;flex-wrap:wrap;border-bottom:3px solid var(--accent)}
-header h1{margin:0;font:700 22px/1 ui-monospace,Menlo,monospace;letter-spacing:-.5px}
-header h1 span{color:var(--accent)}
-header small{opacity:.6;font:11px ui-monospace,Menlo,monospace;text-transform:uppercase;letter-spacing:1px}
-.layout{display:grid;grid-template-columns:380px 1fr;min-height:calc(100vh - 60px)}
-aside{background:var(--panel);border-right:1px solid var(--line);padding:16px;overflow:auto}
-main{padding:20px;overflow:auto}
-h2{font:600 12px ui-monospace,Menlo,monospace;text-transform:uppercase;letter-spacing:1.5px;margin:18px 0 10px;padding-bottom:6px;border-bottom:1px solid var(--line)}
-h2:first-child{margin-top:0}
-label{display:block;font:11px ui-monospace,Menlo,monospace;text-transform:uppercase;color:var(--muted);margin-bottom:3px}
-input[type=text],input[type=number],textarea{width:100%;padding:7px 9px;border:1px solid var(--line);border-radius:6px;background:var(--bg);color:var(--ink);font:13px ui-monospace,Menlo,monospace}
-input:focus,textarea:focus{outline:2px solid var(--accent);outline-offset:-1px}
-.grid{display:grid;gap:8px}
-.g2{grid-template-columns:1fr 1fr}.g3{grid-template-columns:1fr 1fr 1fr}
-.box{background:var(--bg);border:1px solid var(--line);border-radius:8px;padding:10px}
-.toggle{display:flex;align-items:center;gap:8px;margin-top:10px;font-size:12px;cursor:pointer}
-.toggle input{accent-color:var(--accent);width:16px;height:16px}
-table.pieces{width:100%;border-collapse:collapse}
-table.pieces th{font:10px ui-monospace,Menlo,monospace;text-transform:uppercase;color:var(--muted);text-align:left;padding:2px}
-table.pieces td{padding:2px}
-table.pieces input{padding:5px 6px;font-size:12px}
-table.pieces td.c{text-align:center}
-.sw{display:inline-block;width:10px;height:10px;border-radius:2px;margin-right:2px}
-button{font:600 13px system-ui,sans-serif;border-radius:6px;border:1px solid var(--line);background:var(--panel);color:var(--ink);padding:8px 12px;cursor:pointer}
-button:hover{border-color:var(--ink)}
-button.primary{background:var(--accent);color:var(--accent-ink);border-color:var(--accent);width:100%;padding:12px;font-size:15px;margin-top:16px}
-button.primary:hover{filter:brightness(1.07)}
-button.ghost{width:100%;border-style:dashed;margin-top:6px;color:var(--muted)}
-button.x{padding:2px 7px;color:var(--muted);border:none;background:none;font-size:16px}
-button.x:hover{color:var(--accent)}
-.hint{font-size:11px;color:var(--muted);margin:4px 0 6px}
-.empty{height:60vh;display:flex;flex-direction:column;align-items:center;justify-content:center;color:var(--muted);text-align:center}
-.empty .ico{font-size:42px;opacity:.4}
-.empty code{margin-top:16px;border:1px solid var(--line);padding:6px 10px;border-radius:6px;font-size:11px}
-.stats{display:grid;grid-template-columns:repeat(auto-fit,minmax(130px,1fr));gap:10px;margin-bottom:18px}
-.stat{background:var(--panel);border:1px solid var(--line);border-radius:8px;padding:10px 12px}
-.stat b{display:block;font:700 22px ui-monospace,Menlo,monospace}
-.stat span{font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:.5px}
-.toolbar{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:14px}
-.sheet{background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:14px;margin-bottom:18px}
-.sheet h3{margin:0 0 10px;font:600 14px ui-monospace,Menlo,monospace;display:flex;justify-content:space-between;flex-wrap:wrap;gap:6px}
-.sheet h3 small{color:var(--muted);font-weight:400}
-.sheet svg{width:100%;height:auto;display:block}
-.warn{background:#fde8e0;color:#8a2b10;border:1px solid #f0b8a3;border-radius:8px;padding:10px 12px;margin-bottom:14px}
-.list{width:100%;border-collapse:collapse;font-size:12px;margin-top:8px}
-.list th,.list td{border-bottom:1px solid var(--line);padding:5px 6px;text-align:left}
-.list th{font:10px ui-monospace,Menlo,monospace;text-transform:uppercase;color:var(--muted)}
-@media (max-width:860px){.layout{grid-template-columns:1fr}aside{border-right:none;border-bottom:1px solid var(--line)}}
-@media print{
-  :root,:root[data-theme="dark"],:root:not([data-theme="light"]){
-    --bg:#fff; --panel:#fff; --ink:#000; --muted:#555; --line:#ccc;
-    --board:#efe6d4; --board-edge:#8a7a5c;
-  }
-  header,aside,.toolbar{display:none}.layout{display:block}main{padding:0}
-  .sheet{break-inside:avoid;border:none}body{background:#fff;color:#000}
-}
-</style>
+<link rel="stylesheet" href="styles.css">
 </head>
 <body>
+<a class="skip" href="#out">Saltar al resultado</a>
 <header>
   <div>
     <h1>plan<span>de</span>corte</h1>
@@ -137,48 +63,51 @@ button.x:hover{color:var(--accent)}
   </div>
 </header>
 <div class="layout">
-<aside>
-  <h2>Proyecto</h2>
-  <input type="text" id="project" placeholder="Nombre del proyecto…">
+<aside aria-label="Datos del proyecto">
+  <h2 id="project-title">Proyecto</h2>
+  <input type="text" id="project" aria-labelledby="project-title" placeholder="Nombre del proyecto…" autocomplete="off">
 
-  <h2>Tablero</h2>
-  <div class="box">
+  <h2 id="board-title">Tablero</h2>
+  <fieldset class="box" aria-labelledby="board-title">
     <div class="grid g2">
-      <div><label>Ancho (mm)</label><input type="number" id="bw" value="2800" min="1"></div>
-      <div><label>Alto (mm)</label><input type="number" id="bh" value="2070" min="1"></div>
+      <div><label for="bw">Ancho (mm)</label><input type="number" id="bw" value="2800" min="1" inputmode="numeric" aria-describedby="bw-err"><span class="err" id="bw-err"></span></div>
+      <div><label for="bh">Alto (mm)</label><input type="number" id="bh" value="2070" min="1" inputmode="numeric" aria-describedby="bh-err"><span class="err" id="bh-err"></span></div>
     </div>
     <div class="grid g3" style="margin-top:8px">
-      <div><label>Kerf (mm)</label><input type="number" id="kerf" value="4" min="0" step="0.5"></div>
-      <div><label>Margen (mm)</label><input type="number" id="margin" value="0" min="0"></div>
-      <div><label>Máx. tableros</label><input type="number" id="maxb" placeholder="∞" min="1"></div>
+      <div><label for="kerf" title="Ancho del corte de la sierra">Kerf (mm)</label><input type="number" id="kerf" value="4" min="0" step="0.5" inputmode="decimal" aria-describedby="kerf-err"><span class="err" id="kerf-err"></span></div>
+      <div><label for="margin" title="Borde que se descarta alrededor del tablero">Margen (mm)</label><input type="number" id="margin" value="0" min="0" inputmode="numeric" aria-describedby="margin-err"><span class="err" id="margin-err"></span></div>
+      <div><label for="maxb">Máx. tableros</label><input type="number" id="maxb" placeholder="∞" min="1" inputmode="numeric" aria-describedby="maxb-err"><span class="err" id="maxb-err"></span></div>
     </div>
     <label class="toggle"><input type="checkbox" id="grain"> Tablero con veta / fibra (horizontal)</label>
-  </div>
+  </fieldset>
 
-  <h2>Piezas a cortar</h2>
-  <table class="pieces">
-    <thead><tr><th></th><th>Nombre</th><th>Ancho</th><th>Alto</th><th>Cant.</th><th title="Respetar veta (no rotar)">Veta</th><th></th></tr></thead>
+  <h2 id="pieces-title">Piezas a cortar</h2>
+  <table class="pieces" aria-labelledby="pieces-title">
+    <thead><tr><th><span class="sr-only">Color</span></th><th scope="col">Nombre</th><th scope="col">Ancho</th><th scope="col">Alto</th><th scope="col">Cant.</th><th scope="col" title="Respetar veta (no rotar)">Veta</th><th><span class="sr-only">Quitar</span></th></tr></thead>
     <tbody id="rows"></tbody>
   </table>
+  <div class="err" id="rows-err"></div>
   <button class="ghost" id="add">+ Añadir pieza</button>
 
-  <h2>Importar CSV</h2>
-  <div class="hint">Formato: nombre,ancho,alto,cantidad (una por línea)</div>
-  <textarea id="csv" rows="4" placeholder="Lateral,600,2100,2&#10;Puerta,400,700,4&#10;Estante,560,300,3"></textarea>
-  <button style="width:100%;margin-top:6px" id="importBtn">Importar CSV</button>
+  <h2 id="csv-title">Importar CSV</h2>
+  <div class="hint" id="csv-hint">Formato: nombre,ancho,alto,cantidad[,veta] (una por línea)</div>
+  <textarea id="csv" rows="4" aria-labelledby="csv-title" aria-describedby="csv-hint" placeholder="Lateral,600,2100,2&#10;Puerta,400,700,4&#10;Estante,560,300,3"></textarea>
+  <button class="full" id="importBtn">Importar CSV</button>
 
   <button class="primary" id="calc">Calcular ▸</button>
   <div class="hint" style="text-align:center">Ctrl/⌘ + Enter para calcular</div>
 </aside>
 
-<main id="out">
+<main id="out" tabindex="-1" aria-label="Plan de corte">
   <div class="empty">
-    <div class="ico">▦</div>
-    <p>Añade las piezas y pulsa <b>Calcular</b><br>para ver el plan de corte optimizado.</p>
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="3" width="18" height="18" rx="2"/><path d="M3 9h18M9 9v12M15 9v12"/></svg>
+    <p>Añadí las piezas y pulsá <b>Calcular</b><br>para ver el plan de corte optimizado.</p>
+    <button class="cta primary" id="emptyAdd">+ Añadir la primera pieza</button>
     <code>FFD + Guillotina · Rotaciones · Veta · Kerf · Margen</code>
   </div>
 </main>
 </div>
+<div class="toasts" id="toasts" role="status" aria-live="polite"></div>
 
 <script src="app.js" defer></script>
 </body>
