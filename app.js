@@ -11,6 +11,64 @@ const ICONS={
 const icon=k=>`<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${ICONS[k]}</svg>`;
 const isMobile=()=>matchMedia("(max-width:860px)").matches;
 
+// ---------- tapacanto ----------
+// Lados de una pieza, en el orden en que se guardan ("1010" = superior e izquierdo).
+// Superior/inferior miden el ancho; izquierdo/derecho miden el alto.
+const SIDES=[{k:"S",name:"superior"},{k:"I",name:"inferior"},{k:"Z",name:"izquierdo"},{k:"D",name:"derecho"}];
+const normEdges=e=>/^[01]{4}$/.test(e)?e:"0000";
+const edgeList=e=>SIDES.filter((s,i)=>e[i]==="1");
+function edgeGlyph(e){
+  const on=i=>e[i]==="1"?"on":"";
+  return `<svg viewBox="0 0 40 28" aria-hidden="true"><rect x="3" y="3" width="34" height="22" rx="1"/><line class="${on(0)}" x1="3" y1="3" x2="37" y2="3"/><line class="${on(1)}" x1="3" y1="25" x2="37" y2="25"/><line class="${on(2)}" x1="3" y1="3" x2="3" y2="25"/><line class="${on(3)}" x1="37" y1="3" x2="37" y2="25"/></svg>`;
+}
+// Texto del CSV de importación: "T" = todos, o letras S I Z D
+function parseEdges(s){
+  s=String(s||"").toUpperCase().replace(/\s+/g,"");
+  if(s==="T"||s==="TODOS"||s==="4")return "1111";
+  return SIDES.map(x=>s.includes(x.k)?"1":"0").join("");
+}
+let popBtn=null;
+function openEdgePop(btn){
+  const pop=$("edgePop"), e=btn.dataset.e;
+  popBtn=btn;
+  pop.querySelectorAll("input").forEach(c=>c.checked=e[+c.dataset.i]==="1");
+  syncPopGlyph();
+  pop.hidden=false;
+  positionPop();
+  btn.setAttribute("aria-expanded","true");
+  pop.querySelector("input").focus({preventScroll:true});
+}
+function positionPop(){
+  const pop=$("edgePop");
+  if(!popBtn||pop.hidden)return;
+  const r=popBtn.getBoundingClientRect(), pw=pop.offsetWidth, ph=pop.offsetHeight;
+  const left=Math.min(Math.max(8,r.right-pw),innerWidth-pw-8);
+  const top=r.bottom+6+ph>innerHeight?Math.max(8,r.top-ph-6):r.bottom+6;
+  pop.style.left=left+"px";pop.style.top=top+"px";
+}
+function closeEdgePop(refocus=true){
+  const pop=$("edgePop");
+  if(pop.hidden)return;
+  pop.hidden=true;
+  if(popBtn){popBtn.setAttribute("aria-expanded","false");if(refocus)popBtn.focus()}
+  popBtn=null;
+}
+function syncPopGlyph(){
+  $("edgePop").querySelectorAll("input").forEach(c=>$("edgePop").querySelector(`.pop-piece .s${c.dataset.i}`).classList.toggle("on",c.checked));
+}
+function applyPop(){
+  if(!popBtn)return;
+  const e=[0,1,2,3].map(i=>$("edgePop").querySelector(`input[data-i="${i}"]`).checked?"1":"0").join("");
+  setEdges(popBtn,e);save();validate();
+}
+function setEdges(btn,e){
+  btn.dataset.e=e;btn.innerHTML=edgeGlyph(e);
+  const n=btn.closest("tr")?[...$("rows").children].indexOf(btn.closest("tr"))+1:"";
+  const l=edgeList(e).map(s=>s.name);
+  btn.setAttribute("aria-label",`Tapacanto de la pieza ${n}: ${l.length?l.join(", "):"sin canto"}`);
+  btn.title=l.length?`Canto: ${l.join(", ")}`:"Sin tapacanto";
+}
+
 // ---------- avisos ----------
 function toast(msg,{type="info",action=null,timeout=5000}={}){
   const el=document.createElement("div");
@@ -26,7 +84,7 @@ function toast(msg,{type="info",action=null,timeout=5000}={}){
 }
 
 // ---------- piezas (UI) ----------
-function addRow(p={name:"",w:"",h:"",q:1,g:false},before=null){
+function addRow(p={name:"",w:"",h:"",q:1,g:false,e:"0000"},before=null){
   const tr=document.createElement("tr");
   tr.innerHTML=`<td><span class="sw"></span></td>
     <td><input type="text" class="n" value="${esc(p.name)}" placeholder="Pieza" autocomplete="off"></td>
@@ -34,8 +92,12 @@ function addRow(p={name:"",w:"",h:"",q:1,g:false},before=null){
     <td><input type="number" class="h" value="${esc(p.h)}" min="1" inputmode="numeric" aria-describedby="rows-err"></td>
     <td><input type="number" class="q" value="${esc(p.q)}" min="1" inputmode="numeric" aria-describedby="rows-err"></td>
     <td class="c"><input type="checkbox" class="g" ${p.g?"checked":""}></td>
+    <td class="c"><button type="button" class="edge" aria-haspopup="dialog" aria-expanded="false" aria-controls="edgePop"></button></td>
     <td><button class="x">×</button></td>`;
   tr.querySelector(".x").onclick=()=>removeRow(tr);
+  const eb=tr.querySelector(".edge");
+  eb.dataset.e=normEdges(p.e);
+  eb.onclick=()=>popBtn===eb?closeEdgePop():openEdgePop(eb);
   tr.querySelectorAll("input").forEach(i=>{
     i.addEventListener("input",()=>{save();validate()});
     // Enter salta a la pieza siguiente (o crea una nueva al final)
@@ -62,7 +124,7 @@ function removeRow(tr){
   }},timeout:7000});
 }
 function rowData(tr){
-  return {name:tr.querySelector(".n").value,w:tr.querySelector(".w").value,h:tr.querySelector(".h").value,q:tr.querySelector(".q").value,g:tr.querySelector(".g").checked};
+  return {name:tr.querySelector(".n").value,w:tr.querySelector(".w").value,h:tr.querySelector(".h").value,q:tr.querySelector(".q").value,g:tr.querySelector(".g").checked,e:tr.querySelector(".edge").dataset.e};
 }
 function refreshRows(){
   [...$("rows").children].forEach((tr,i)=>{
@@ -75,6 +137,7 @@ function refreshRows(){
     tr.querySelector(".g").setAttribute("aria-label",`Respetar veta en la pieza ${n}`);
     tr.querySelector(".x").setAttribute("aria-label",`Quitar pieza ${n}`);
     tr.querySelector(".x").title="Quitar";
+    const eb=tr.querySelector(".edge");setEdges(eb,eb.dataset.e);
   });
 }
 
@@ -97,6 +160,10 @@ function validate(){
     margin>0&&W>0&&H>0&&(2*margin>=W||2*margin>=H)?"Es mayor que el tablero":"";
   field("margin",mErr);
   field("maxb",maxb!=null&&!(Number.isInteger(maxb)&&maxb>=1)?"Entero desde 1":"");
+  const ct=num("ct"), cx=num("cx");
+  field("ct",ct!=null&&ct<0?"No puede ser negativo":ct>10?"Revisá: más de 10 mm":"");
+  field("cx",cx!=null&&cx<0?"No puede ser negativo":"");
+  const t=ct>0?ct:0;
 
   const uw=(W||0)-2*(margin||0), uh=(H||0)-2*(margin||0), grain=$("grain").checked;
   const rowMsgs=[];
@@ -108,9 +175,13 @@ function validate(){
     if(blank){}
     else if(w==null||h==null){wErr=w==null&&attempted;hErr=h==null&&attempted;if(attempted)msg=`${label}: falta ${w==null?"el ancho":"el alto"}`}
     else if(!(w>0)||!(h>0)){wErr=!(w>0);hErr=!(h>0);msg=`${label}: las medidas deben ser mayores a 0`}
-    else if(uw>0&&uh>0){
-      const fits=(w<=uw&&h<=uh)||(!(grain&&d.g)&&h<=uw&&w<=uh);
-      if(!fits){wErr=hErr=true;msg=`${label} (${w}×${h}) no entra en el tablero${grain&&d.g?" respetando la veta":""}`}
+    else{
+      const c=cutSize(w,h,d.e,t);
+      if(!(c.w>0&&c.h>0)){wErr=hErr=true;msg=`${label}: el canto es más grueso que la pieza`}
+      else if(uw>0&&uh>0){
+        const fits=(c.w<=uw&&c.h<=uh)||(!(grain&&d.g)&&c.h<=uw&&c.w<=uh);
+        if(!fits){wErr=hErr=true;msg=`${label} (${w}×${h}) no entra en el tablero${grain&&d.g?" respetando la veta":""}`}
+      }
     }
     const qErr=q!=null&&!(Number.isInteger(q)&&q>=1);
     if(qErr&&!msg)msg=`${label}: la cantidad debe ser un entero desde 1`;
@@ -122,20 +193,39 @@ function validate(){
   return errs;
 }
 function esc(s){return String(s??"").replace(/[&<>"]/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]))}
+// Medida de corte: la final menos el espesor del canto en cada lado que lo lleva.
+// Se redondea a 0,1 mm para no arrastrar decimales de coma flotante.
+function cutSize(w,h,e,t){
+  e=normEdges(e);
+  const r=v=>Math.round(v*10)/10;
+  return {w:r(w-t*((e[2]==="1")+(e[3]==="1"))),h:r(h-t*((e[0]==="1")+(e[1]==="1")))};
+}
+// Metros lineales de canto de una unidad, con el sobrante por tramo
+function edgeMeters(fw,fh,e,extra){
+  e=normEdges(e);
+  return ((e[0]==="1")*(fw+extra)+(e[1]==="1")*(fw+extra)+(e[2]==="1")*(fh+extra)+(e[3]==="1")*(fh+extra))/1000;
+}
+// w/h son las medidas de corte (las que usa el optimizador); fw/fh las finales.
 function readPieces(){
-  return [...$("rows").children].map((tr,i)=>({
-    name:tr.querySelector(".n").value.trim()||`Pieza ${i+1}`,
-    w:+tr.querySelector(".w").value, h:+tr.querySelector(".h").value,
-    q:Math.max(1,parseInt(tr.querySelector(".q").value)||1),
-    g:tr.querySelector(".g").checked, color:COLORS[i%COLORS.length], id:i
-  })).filter(p=>p.w>0&&p.h>0);
+  const cfg=readCfg();
+  return [...$("rows").children].map((tr,i)=>{
+    const fw=+tr.querySelector(".w").value, fh=+tr.querySelector(".h").value, e=tr.querySelector(".edge").dataset.e;
+    const c=cutSize(fw,fh,e,cfg.ct);
+    return {
+      name:tr.querySelector(".n").value.trim()||`Pieza ${i+1}`,
+      w:c.w, h:c.h, fw, fh, e, em:edgeMeters(fw,fh,e,cfg.cx),
+      q:Math.max(1,parseInt(tr.querySelector(".q").value)||1),
+      g:tr.querySelector(".g").checked, color:COLORS[i%COLORS.length], id:i
+    };
+  }).filter(p=>p.fw>0&&p.fh>0&&p.w>0&&p.h>0);
 }
 function readCfg(){
   return {W:+$("bw").value,H:+$("bh").value,kerf:Math.max(0,+$("kerf").value||0),
-    margin:Math.max(0,+$("margin").value||0),maxB:parseInt($("maxb").value)||Infinity,grain:$("grain").checked};
+    margin:Math.max(0,+$("margin").value||0),maxB:parseInt($("maxb").value)||Infinity,grain:$("grain").checked,
+    ct:Math.max(0,+$("ct").value||0),cx:Math.max(0,+$("cx").value||0)};
 }
 function save(){
-  try{localStorage.setItem(STORE,JSON.stringify({project:$("project").value,cfg:{bw:$("bw").value,bh:$("bh").value,kerf:$("kerf").value,margin:$("margin").value,maxb:$("maxb").value,grain:$("grain").checked},
+  try{localStorage.setItem(STORE,JSON.stringify({project:$("project").value,cfg:{bw:$("bw").value,bh:$("bh").value,kerf:$("kerf").value,margin:$("margin").value,maxb:$("maxb").value,grain:$("grain").checked,ct:$("ct").value,cx:$("cx").value},
     rows:[...$("rows").children].map(rowData)}))}catch(e){}
 }
 function load(){
@@ -143,9 +233,9 @@ function load(){
   if(s&&typeof s==="object"){
     const cfg=s.cfg||{};
     $("project").value=s.project||"";
-    for(const k of ["bw","bh","kerf","margin","maxb"])if(cfg[k]!=null)$(k).value=cfg[k];
+    for(const k of ["bw","bh","kerf","margin","maxb","ct","cx"])if(cfg[k]!=null)$(k).value=cfg[k];
     $("grain").checked=!!cfg.grain;
-    if(Array.isArray(s.rows))s.rows.forEach(r=>addRow({name:"",w:"",h:"",q:1,g:false,...r}));
+    if(Array.isArray(s.rows))s.rows.forEach(r=>addRow({name:"",w:"",h:"",q:1,g:false,e:"0000",...r}));
   }
 }
 
@@ -265,6 +355,8 @@ function render(r){
   const total=r.boards.length*boardArea;
   const nPieces=r.boards.reduce((s,b)=>s+b.placed.length,0);
   const pct=total?used/total*100:0;
+  const edgeTotal=r.boards.reduce((s,b)=>s+b.placed.reduce((a,p)=>a+p.item.em,0),0);
+  const anyEdge=edgeTotal>0, anyCut=r.boards.some(b=>b.placed.some(p=>p.item.w!==p.item.fw||p.item.h!==p.item.fh));
   let h="";
   if(r.unplaced.length){
     const names=[...new Set(r.unplaced.map(u=>`${u.name} (${u.w}×${u.h})`))].join(", ");
@@ -276,6 +368,7 @@ function render(r){
     <div class="stat"><b>${pct.toFixed(1)}%</b><span>Aprovechamiento</span></div>
     <div class="stat"><b>${((total-used)/1e6).toFixed(2)} m²</b><span>Desperdicio</span></div>
     <div class="stat"><b>${(used/1e6).toFixed(2)} m²</b><span>Superficie útil</span></div>
+    ${edgeTotal>0?`<div class="stat"><b>${edgeTotal.toFixed(2)} m</b><span>Tapacanto</span></div>`:""}
   </div>
   <div class="toolbar">
     <button class="edit" id="editBtn">${icon("edit")}Editar piezas</button>
@@ -288,8 +381,8 @@ function render(r){
     const u=b.placed.reduce((a,p)=>a+p.w*p.h,0);
     h+=`<div class="sheet"><h3>Tablero ${i+1} <small>${cfg.W} × ${cfg.H} mm · ${b.placed.length} piezas · ${(u/boardArea*100).toFixed(1)}% aprovechado</small></h3>
       ${boardSVG(b,cfg,i)}
-      <div class="tablewrap"><table class="list"><caption class="sr-only">Piezas del tablero ${i+1}</caption><thead><tr><th scope="col">#</th><th scope="col">Pieza</th><th scope="col">Medida</th><th scope="col">Posición (x,y)</th><th scope="col">Rotada</th></tr></thead><tbody>
-      ${b.placed.map((p,j)=>`<tr><td>${j+1}</td><td><span class="sw" style="background:${p.item.color}"></span>${esc(p.item.name)}</td><td>${p.item.w} × ${p.item.h}</td><td>${p.x+cfg.margin}, ${p.y+cfg.margin}</td><td>${p.rot?"↻ sí":"—"}</td></tr>`).join("")}
+      <div class="tablewrap"><table class="list"><caption class="sr-only">Piezas del tablero ${i+1}</caption><thead><tr><th scope="col">#</th><th scope="col">Pieza</th><th scope="col">${anyCut?"Final":"Medida"}</th>${anyCut?'<th scope="col">Corte</th>':""}${anyEdge?'<th scope="col">Canto</th>':""}<th scope="col">Posición (x,y)</th><th scope="col">Rotada</th></tr></thead><tbody>
+      ${b.placed.map((p,j)=>`<tr><td>${j+1}</td><td><span class="sw" style="background:${p.item.color}"></span>${esc(p.item.name)}</td><td>${p.item.fw} × ${p.item.fh}</td>${anyCut?`<td>${p.item.w} × ${p.item.h}</td>`:""}${anyEdge?`<td class="edges">${edgeText(p.item.e)}</td>`:""}<td>${p.x+cfg.margin}, ${p.y+cfg.margin}</td><td>${p.rot?"↻ sí":"—"}</td></tr>`).join("")}
       </tbody></table></div></div>`;
   });
   h+=`<div class="hint">Calculado en ${r.ms.toFixed(0)} ms · mejor estrategia: ${r.algo}</div>`;
@@ -317,6 +410,7 @@ function boardSVG(b,cfg,i){
     const x=p.x+cfg.margin,y=p.y+cfg.margin;
     s+=`<g><title>${esc(p.item.name)} ${p.item.w}×${p.item.h}${p.rot?" (rotada)":""}</title>
       <rect x="${x}" y="${y}" width="${p.w}" height="${p.h}" fill="${p.item.color}" fill-opacity=".85" stroke="#1d1b18" stroke-opacity=".6" stroke-width="${fs/8}"/>`;
+    s+=edgeLines(p,x,y,fs);
     if(showLabels){
       const f=Math.min(fs,p.w/7,p.h/3);
       if(f>fs*0.35){
@@ -328,6 +422,20 @@ function boardSVG(b,cfg,i){
   }
   return s+"</svg>";
 }
+// Lados con canto tal como quedan en el tablero: al rotar la pieza 90°,
+// superior/inferior pasan a izquierda/derecha y viceversa.
+function edgeLines(p,x,y,fs){
+  const e=normEdges(p.item.e);
+  if(e==="0000")return "";
+  const on=i=>e[p.rot?[2,3,0,1][i]:i]==="1";
+  const sw=fs/2.5, o=sw/2, L=[];
+  if(on(0))L.push([x,y+o,x+p.w,y+o]);
+  if(on(1))L.push([x,y+p.h-o,x+p.w,y+p.h-o]);
+  if(on(2))L.push([x+o,y,x+o,y+p.h]);
+  if(on(3))L.push([x+p.w-o,y,x+p.w-o,y+p.h]);
+  return L.map(([a,b,c,d])=>`<line x1="${a}" y1="${b}" x2="${c}" y2="${d}" stroke="#1d1b18" stroke-width="${sw}"/>`).join("");
+}
+const edgeText=e=>{const l=edgeList(normEdges(e));return l.length===4?"Todos":l.length?l.map(s=>s.name.slice(0,3)).join(", "):"—"};
 // Evita que Excel/Sheets interprete un nombre como fórmula (CSV injection)
 function csvCell(v){
   let s=String(v);
@@ -337,8 +445,11 @@ function csvCell(v){
 function exportCSV(){
   if(!lastResult)return;
   const m=lastResult.cfg.margin;
-  let csv="tablero,pieza,ancho,alto,x,y,rotada\n";
-  lastResult.boards.forEach((b,i)=>b.placed.forEach(p=>csv+=`${i+1},${csvCell(p.item.name)},${p.item.w},${p.item.h},${p.x+m},${p.y+m},${p.rot?"si":"no"}\n`));
+  let csv="tablero,pieza,ancho_corte,alto_corte,ancho_final,alto_final,canto,canto_m,x,y,rotada\n";
+  lastResult.boards.forEach((b,i)=>b.placed.forEach(p=>{
+    const it=p.item, sides=edgeList(normEdges(it.e)).map(s=>s.k).join("");
+    csv+=`${i+1},${csvCell(it.name)},${it.w},${it.h},${it.fw},${it.fh},${sides||"-"},${it.em.toFixed(3)},${p.x+m},${p.y+m},${p.rot?"si":"no"}\n`;
+  }));
   const a=document.createElement("a");
   a.href=URL.createObjectURL(new Blob([csv],{type:"text/csv"}));
   a.download=($("project").value||"plan-de-corte").replace(/[^\w-]+/g,"_")+".csv";a.click();
@@ -356,13 +467,26 @@ $("importBtn").onclick=()=>{
   for(const l of lines){
     const c=l.split(/[;,\t]/).map(s=>s.trim());
     if(c.length<3||!(+c[1]>0)||!(+c[2]>0))continue;
-    addRow({name:c[0],w:+c[1],h:+c[2],q:parseInt(c[3])||1,g:/^(1|si|sí|true|v)$/i.test(c[4]||"")});n++;
+    addRow({name:c[0],w:+c[1],h:+c[2],q:parseInt(c[3])||1,g:/^(1|si|sí|true|v)$/i.test(c[4]||""),e:parseEdges(c[5])});n++;
   }
   const skipped=lines.length-n;
   if(!n){toast("No se encontró ninguna línea válida. Formato: nombre,ancho,alto,cantidad",{type:"error",timeout:7000});return}
   $("csv").value="";save();validate();
   toast(`Se importaron ${n} pieza${n===1?"":"s"}${skipped?` · ${skipped} línea${skipped===1?"":"s"} ignorada${skipped===1?"":"s"}`:""}.`,{type:skipped?"error":"info"});
 };
-["project","bw","bh","kerf","margin","maxb","grain"].forEach(id=>$(id).addEventListener("input",()=>{save();validate()}));
-document.addEventListener("keydown",e=>{if((e.ctrlKey||e.metaKey)&&e.key==="Enter"){e.preventDefault();calculate()}});
+["project","bw","bh","kerf","margin","maxb","grain","ct","cx"].forEach(id=>$(id).addEventListener("input",()=>{save();validate()}));
+document.addEventListener("keydown",e=>{
+  if((e.ctrlKey||e.metaKey)&&e.key==="Enter"){e.preventDefault();closeEdgePop(false);calculate()}
+  else if(e.key==="Escape"&&!$("edgePop").hidden){e.preventDefault();closeEdgePop()}
+});
+$("edgePop").addEventListener("change",()=>{syncPopGlyph();applyPop()});
+$("edgeAll").onclick=()=>{$("edgePop").querySelectorAll("input").forEach(c=>c.checked=true);syncPopGlyph();applyPop()};
+$("edgeNone").onclick=()=>{$("edgePop").querySelectorAll("input").forEach(c=>c.checked=false);syncPopGlyph();applyPop()};
+$("edgeOk").onclick=()=>closeEdgePop();
+// cerrar al tocar fuera o al pasar el foco a otro lado
+document.addEventListener("pointerdown",e=>{if(popBtn&&!$("edgePop").contains(e.target)&&!popBtn.contains(e.target))closeEdgePop(false)});
+$("edgePop").addEventListener("focusout",e=>{if(popBtn&&e.relatedTarget&&!$("edgePop").contains(e.relatedTarget)&&e.relatedTarget!==popBtn)closeEdgePop(false)});
+// seguir al botón al hacer scroll o cuando el celular cambia el alto de la pantalla
+addEventListener("resize",positionPop);
+addEventListener("scroll",positionPop,{passive:true,capture:true});
 load();validate();

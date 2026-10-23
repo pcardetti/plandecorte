@@ -81,16 +81,25 @@
     <label class="toggle"><input type="checkbox" id="grain"> Tablero con veta / fibra (horizontal)</label>
   </fieldset>
 
+  <h2 id="edge-title">Tapacanto</h2>
+  <fieldset class="box" aria-labelledby="edge-title">
+    <div class="grid g2">
+      <div><label for="ct" title="Se descuenta de la medida de corte en cada lado con canto">Espesor (mm)</label><input type="number" id="ct" value="0" min="0" step="0.05" inputmode="decimal" aria-describedby="ct-hint ct-err"><span class="err" id="ct-err"></span></div>
+      <div><label for="cx" title="Largo extra por tramo para el recorte">Sobrante por tramo (mm)</label><input type="number" id="cx" value="0" min="0" inputmode="numeric" aria-describedby="cx-err"><span class="err" id="cx-err"></span></div>
+    </div>
+    <div class="hint" id="ct-hint">Las medidas de las piezas son finales: el espesor del canto se descuenta del corte. Elegí los lados de cada pieza en la columna <b>Canto</b>.</div>
+  </fieldset>
+
   <h2 id="pieces-title">Piezas a cortar</h2>
   <table class="pieces" aria-labelledby="pieces-title">
-    <thead><tr><th><span class="sr-only">Color</span></th><th scope="col">Nombre</th><th scope="col">Ancho</th><th scope="col">Alto</th><th scope="col">Cant.</th><th scope="col" title="Respetar veta (no rotar)">Veta</th><th><span class="sr-only">Quitar</span></th></tr></thead>
+    <thead><tr><th><span class="sr-only">Color</span></th><th scope="col">Nombre</th><th scope="col">Ancho</th><th scope="col">Alto</th><th scope="col">Cant.</th><th scope="col" title="Respetar veta (no rotar)">Veta</th><th scope="col" title="Lados con tapacanto">Canto</th><th><span class="sr-only">Quitar</span></th></tr></thead>
     <tbody id="rows"></tbody>
   </table>
   <div class="err" id="rows-err"></div>
   <button class="ghost" id="add">+ Añadir pieza</button>
 
   <h2 id="csv-title">Importar CSV</h2>
-  <div class="hint" id="csv-hint">Formato: nombre,ancho,alto,cantidad[,veta] (una por línea)</div>
+  <div class="hint" id="csv-hint">Formato: nombre,ancho,alto,cantidad[,veta][,canto] (una por línea). Canto: lados con S, I, Z, D (superior, inferior, izquierdo, derecho) o T para todos.</div>
   <textarea id="csv" rows="4" aria-labelledby="csv-title" aria-describedby="csv-hint" placeholder="Lateral,600,2100,2&#10;Puerta,400,700,4&#10;Estante,560,300,3"></textarea>
   <button class="full" id="importBtn">Importar CSV</button>
 
@@ -106,6 +115,17 @@
     <code>FFD + Guillotina · Rotaciones · Veta · Kerf · Margen</code>
   </div>
 </main>
+</div>
+<div class="pop" id="edgePop" role="dialog" aria-modal="false" aria-labelledby="edgePop-title" hidden>
+  <div class="pop-title" id="edgePop-title">Tapacanto</div>
+  <div class="pop-grid">
+    <label class="pop-side sup"><input type="checkbox" data-i="0"> Superior</label>
+    <label class="pop-side izq"><input type="checkbox" data-i="2"> Izq.</label>
+    <div class="pop-piece" aria-hidden="true"><svg viewBox="0 0 40 28"><rect x="3" y="3" width="34" height="22" rx="1"/><line class="s0" x1="3" y1="3" x2="37" y2="3"/><line class="s1" x1="3" y1="25" x2="37" y2="25"/><line class="s2" x1="3" y1="3" x2="3" y2="25"/><line class="s3" x1="37" y1="3" x2="37" y2="25"/></svg></div>
+    <label class="pop-side der"><input type="checkbox" data-i="3"> Der.</label>
+    <label class="pop-side inf"><input type="checkbox" data-i="1"> Inferior</label>
+  </div>
+  <div class="pop-actions"><button type="button" id="edgeAll">Todos</button><button type="button" id="edgeNone">Ninguno</button><button type="button" class="ok" id="edgeOk">Listo</button></div>
 </div>
 <div class="toasts" id="toasts" role="status" aria-live="polite"></div>
 

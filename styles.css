@@ -117,3 +117,25 @@ button.x:hover{color:var(--danger-ink)}
   .sheet{break-inside:avoid;border:none}body{background:#fff;color:#000}
 }
 fieldset.box{margin:0;min-width:0}
+
+/* tapacanto */
+button.edge{padding:3px 4px;background:none;border-color:transparent}
+button.edge:hover{border-color:var(--line)}
+button.edge svg,.pop-piece svg{width:24px;height:17px}
+button.edge rect,.pop-piece rect{fill:var(--board);stroke:var(--line);stroke-width:1.5}
+button.edge line,.pop-piece line{stroke:transparent;stroke-width:4;stroke-linecap:square}
+button.edge line.on,.pop-piece line.on{stroke:var(--ink)}
+.pop{position:fixed;z-index:30;background:var(--panel);color:var(--ink);border:1px solid var(--line);border-radius:10px;box-shadow:var(--shadow);padding:12px;width:240px}
+.pop[hidden]{display:none}
+.pop-title{font:600 11px ui-monospace,Menlo,monospace;text-transform:uppercase;letter-spacing:1px;color:var(--muted);margin-bottom:8px}
+.pop-grid{display:grid;grid-template-columns:auto 1fr auto;grid-template-areas:". sup ." "izq piece der" ". inf .";align-items:center;justify-items:center;gap:4px 8px}
+.pop-side{display:flex;align-items:center;gap:5px;margin:0;font:12px system-ui,sans-serif;text-transform:none;color:var(--ink);cursor:pointer}
+.pop-side input{accent-color:var(--accent);width:16px;height:16px;margin:0}
+.pop-side.sup{grid-area:sup}.pop-side.inf{grid-area:inf}.pop-side.izq{grid-area:izq}.pop-side.der{grid-area:der}
+.pop-piece{grid-area:piece}
+.pop-piece svg{width:72px;height:50px}
+.pop-actions{display:flex;gap:6px;margin-top:10px}
+.pop-actions button{flex:1;padding:6px 8px;font-size:12px}
+.pop-actions button.ok{background:var(--accent);color:var(--accent-ink);border-color:var(--accent)}
+.list td.edges{color:var(--muted)}
+@media print{.pop{display:none}}
