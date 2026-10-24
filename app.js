@@ -608,7 +608,8 @@ function rotatePiece(key){
   if(cfg.grain&&it.g){toast(`«${it.name}» tiene la veta ${GRAIN_TXT[it.g]}: no se puede girar sin cruzarla. Cambiá la veta a «—» para girarla.`,{type:"error",timeout:7000});return}
   if(it.w===it.h){toast(`«${it.name}» es cuadrada: girarla no cambia nada.`);return}
   const [w,h]=p.rot?[it.w,it.h]:[it.h,it.w];
-  if(w>uw||h>uh){toast(`«${it.name}» no entra girada en el tablero.`,{type:"error"});return}
+  // p.rot = cómo está ahora; el aviso habla de la posición a la que se quiere pasar
+  if(w>uw||h>uh){toast(`«${it.name}» (${it.w}×${it.h}) no entra ${p.rot?"sin girar":"girada"} en el tablero: necesita ${w}×${h} y el espacio útil es ${uw}×${uh}.`,{type:"error",timeout:7000});return}
   forced[key]=!p.rot;
   calculate({noScroll:true,msg:`«${it.name}» girada`});
   // mantener el foco en la misma pieza para seguir usando el teclado
