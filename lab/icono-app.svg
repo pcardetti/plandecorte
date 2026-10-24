@@ -1,0 +1,10 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512">
+  <rect width="512" height="512" fill="#1d1b18"/>
+  <!-- tablero con piezas, dentro de la zona segura (círculo central del 80%) -->
+  <rect x="116" y="146" width="280" height="220" rx="10" fill="#efe6d4"/>
+  <rect x="130" y="160" width="120" height="192" fill="#d4552a"/>
+  <rect x="262" y="160" width="120" height="84" fill="#3d8eb9"/>
+  <rect x="262" y="256" width="56" height="96" fill="#81b29a"/>
+  <rect x="326" y="256" width="56" height="96" fill="#f2cc8f"/>
+  <rect x="116" y="384" width="280" height="12" rx="6" fill="#d4552a"/>
+</svg>
