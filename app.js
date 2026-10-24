@@ -8,12 +8,26 @@ const ICONS={
   ruler:'<path d="M21.3 15.3a2.4 2.4 0 0 1 0 3.4l-2.6 2.6a2.4 2.4 0 0 1-3.4 0L2.7 8.7a2.4 2.4 0 0 1 0-3.4l2.6-2.6a2.4 2.4 0 0 1 3.4 0Z"/><path d="m7.5 10.5 2-2M10.5 13.5l2-2M13.5 16.5l2-2"/>',
   edit:'<path d="M12 20h9"/><path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4Z"/>',
   plus:'<path d="M12 5v14M5 12h14"/>',
+  rotate:'<path d="M3 12a9 9 0 1 0 3-6.7L3 8"/><path d="M3 3v5h5"/>',
   copy:'<rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/>',
   trash:'<path d="M3 6h18"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6"/><path d="M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/>',
   share:'<circle cx="18" cy="5" r="3"/><circle cx="6" cy="12" r="3"/><circle cx="18" cy="19" r="3"/><path d="m8.6 13.5 6.8 4M15.4 6.5l-6.8 4"/>',
 };
 const icon=k=>`<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${ICONS[k]}</svg>`;
 const isMobile=()=>matchMedia("(max-width:860px)").matches;
+
+// ---------- veta ----------
+// Dirección de la veta en cada pieza: "" libre (se puede girar), "w" a lo largo
+// del ancho, "h" a lo largo del alto. La veta del tablero corre a lo largo de su ancho.
+// Las versiones anteriores guardaban true = "no girar" (equivale a "w").
+const normGrain=g=>g===true?"w":g==="w"||g==="h"?g:"";
+const GRAIN_TXT={"":"libre (se puede girar)",w:"a lo largo del ancho",h:"a lo largo del alto"};
+// Orientaciones posibles de una pieza: [ancho, alto, rotada] sobre el tablero
+function orientations(w,h,g,grain){
+  if(grain&&g==="w")return [[w,h,false]];
+  if(grain&&g==="h")return [[h,w,true]];
+  return w===h?[[w,h,false]]:[[w,h,false],[h,w,true]];
+}
 
 // ---------- tapacanto ----------
 // Lados de una pieza, en el orden en que se guardan ("1010" = superior e izquierdo).
@@ -24,6 +38,13 @@ const edgeList=e=>SIDES.filter((s,i)=>e[i]==="1");
 function edgeGlyph(e){
   const on=i=>e[i]==="1"?"on":"";
   return `<svg viewBox="0 0 40 28" aria-hidden="true"><rect x="3" y="3" width="34" height="22" rx="1"/><line class="${on(0)}" x1="3" y1="3" x2="37" y2="3"/><line class="${on(1)}" x1="3" y1="25" x2="37" y2="25"/><line class="${on(2)}" x1="3" y1="3" x2="3" y2="25"/><line class="${on(3)}" x1="37" y1="3" x2="37" y2="25"/></svg>`;
+}
+// Columna veta del CSV: alto/h/vertical/↕, ancho/w/horizontal/↔ (o si/1/v, como antes)
+function parseGrain(s){
+  s=String(s||"").trim().toLowerCase();
+  if(/^(h|alto|vertical|↕)$/.test(s))return "h";
+  if(/^(w|a|ancho|horizontal|↔|1|si|sí|true|v)$/.test(s))return "w";
+  return "";
 }
 // Texto del CSV de importación: "T" = todos, o letras S I Z D
 function parseEdges(s){
@@ -91,20 +112,28 @@ function toast(msg,{type="info",action=null,timeout=5000}={}){
 }
 
 // ---------- piezas (UI) ----------
-function addRow(p={name:"",w:"",h:"",q:1,g:false,e:"0000"},before=null){
+function addRow(p={name:"",w:"",h:"",q:1,g:"",e:"0000"},before=null){
   const tr=document.createElement("tr");
   tr.innerHTML=`<td><span class="sw"></span></td>
     <td><input type="text" class="n" value="${esc(p.name)}" placeholder="Pieza" autocomplete="off"></td>
     <td><input type="number" class="w" value="${esc(p.w)}" min="1" inputmode="numeric" aria-describedby="rows-err"></td>
     <td><input type="number" class="h" value="${esc(p.h)}" min="1" inputmode="numeric" aria-describedby="rows-err"></td>
     <td><input type="number" class="q" value="${esc(p.q)}" min="1" inputmode="numeric" aria-describedby="rows-err"></td>
-    <td class="c"><input type="checkbox" class="g" ${p.g?"checked":""}></td>
+    <td class="c"><select class="g">${["","w","h"].map(v=>`<option value="${v}" ${normGrain(p.g)===v?"selected":""}>${{"":"—",w:"↔",h:"↕"}[v]}</option>`).join("")}</select></td>
     <td class="c"><button type="button" class="edge" aria-haspopup="dialog" aria-expanded="false" aria-controls="edgePop"></button></td>
     <td><button class="x">×</button></td>`;
   tr.querySelector(".x").onclick=()=>removeRow(tr);
   const eb=tr.querySelector(".edge");
   eb.dataset.e=normEdges(p.e);
   eb.onclick=()=>popBtn===eb?closeEdgePop():openEdgePop(eb);
+  tr.querySelector(".g").addEventListener("change",e=>{
+    // elegir veta en una pieza implica que el tablero tiene veta
+    if(e.target.value&&!$("grain").checked){
+      $("grain").checked=true;
+      toast("Activé «Tablero con veta» para que la veta de las piezas se respete.");
+    }
+    refreshRows();save();validate();
+  });
   tr.querySelectorAll("input").forEach(i=>{
     i.addEventListener("input",()=>{save();validate()});
     // Enter salta a la pieza siguiente (o crea una nueva al final)
@@ -131,7 +160,7 @@ function removeRow(tr){
   }},timeout:7000});
 }
 function rowData(tr){
-  return {name:tr.querySelector(".n").value,w:tr.querySelector(".w").value,h:tr.querySelector(".h").value,q:tr.querySelector(".q").value,g:tr.querySelector(".g").checked,e:tr.querySelector(".edge").dataset.e};
+  return {name:tr.querySelector(".n").value,w:tr.querySelector(".w").value,h:tr.querySelector(".h").value,q:tr.querySelector(".q").value,g:tr.querySelector(".g").value,e:tr.querySelector(".edge").dataset.e};
 }
 function refreshRows(){
   [...$("rows").children].forEach((tr,i)=>{
@@ -141,7 +170,9 @@ function refreshRows(){
     tr.querySelector(".w").setAttribute("aria-label",`Ancho de la pieza ${n} en mm`);
     tr.querySelector(".h").setAttribute("aria-label",`Alto de la pieza ${n} en mm`);
     tr.querySelector(".q").setAttribute("aria-label",`Cantidad de la pieza ${n}`);
-    tr.querySelector(".g").setAttribute("aria-label",`Respetar veta en la pieza ${n}`);
+    const g=tr.querySelector(".g");
+    g.setAttribute("aria-label",`Veta de la pieza ${n}: ${GRAIN_TXT[g.value]}`);
+    g.title=`Veta: ${GRAIN_TXT[g.value]}`;
     tr.querySelector(".x").setAttribute("aria-label",`Quitar pieza ${n}`);
     tr.querySelector(".x").title="Quitar";
     const eb=tr.querySelector(".edge");setEdges(eb,eb.dataset.e);
@@ -187,8 +218,8 @@ function validate(){
       const c=cutSize(w,h,d.e,t);
       if(!(c.w>0&&c.h>0)){wErr=hErr=true;msg=`${label}: el canto es más grueso que la pieza`}
       else if(uw>0&&uh>0){
-        const fits=(c.w<=uw&&c.h<=uh)||(!(grain&&d.g)&&c.h<=uw&&c.w<=uh);
-        if(!fits){wErr=hErr=true;msg=`${label} (${w}×${h}) no entra en el tablero${grain&&d.g?" respetando la veta":""}`}
+        const lock=grain&&d.g, fits=orientations(c.w,c.h,d.g,grain).some(([a,b])=>a<=uw&&b<=uh);
+        if(!fits){wErr=hErr=true;msg=`${label} (${w}×${h}) no entra en el tablero${lock?" con la veta "+GRAIN_TXT[d.g]:""}`}
       }
     }
     const qErr=q!=null&&!(Number.isInteger(q)&&q>=1);
@@ -225,7 +256,7 @@ function readPieces(){
       name:tr.querySelector(".n").value.trim()||`Pieza ${i+1}`,
       w:c.w, h:c.h, fw, fh, e, em:edgeMeters(fw,fh,e,cfg.cx),
       q:Math.max(1,parseInt(tr.querySelector(".q").value)||1),
-      g:tr.querySelector(".g").checked, color:COLORS[i%COLORS.length], id:i
+      g:tr.querySelector(".g").value, color:COLORS[i%COLORS.length], id:i
     };
   }).filter(p=>p.fw>0&&p.fh>0&&p.w>0&&p.h>0);
 }
@@ -257,7 +288,7 @@ function sanitize(s){
     project:str(s.project,120),
     cfg:{...Object.fromEntries(CFG_KEYS.map(k=>[k,cfg[k]==null?DEFAULTS[k]:str(cfg[k],16)])),grain:!!cfg.grain},
     rows:(Array.isArray(s.rows)?s.rows:[]).slice(0,500).filter(r=>r&&typeof r==="object")
-      .map(r=>({name:str(r.name,80),w:str(r.w,12),h:str(r.h,12),q:str(r.q??1,6),g:!!r.g,e:normEdges(r.e)}))
+      .map(r=>({name:str(r.name,80),w:str(r.w,12),h:str(r.h,12),q:str(r.q??1,6),g:normGrain(r.g),e:normEdges(r.e)}))
   };
 }
 function applyState(s){
@@ -438,9 +469,9 @@ function pack(pieces,cfg,sortFn,fitRule,splitRule){
   const boards=[], unplaced=[];
   const newBoard=()=>({free:[{x:0,y:0,w:uw,h:uh}],placed:[],cuts:0});
   for(const it of items){
-    const canRot=!(cfg.grain&&it.g);
-    const orients=[[it.w,it.h,false]];
-    if(canRot&&it.w!==it.h)orients.push([it.h,it.w,true]);
+    // un giro elegido a mano en el plano manda sobre la elección del optimizador
+    const forced=cfg.force?.[`${it.id}:${it.n}`];
+    const orients=forced==null?orientations(it.w,it.h,it.g,cfg.grain):[forced?[it.h,it.w,true]:[it.w,it.h,false]];
     let best=null;
     const tryBoard=(b,bi)=>{
       b.free.forEach((f,fi)=>{
@@ -515,7 +546,10 @@ function optimize(pieces,cfg){
 
 // ---------- render ----------
 let lastResult=null;
-function calculate(){
+// Giros elegidos a mano en el plano: {"fila:copia": true=rotada/false=normal}.
+// Se descartan solos cuando cambian las piezas o el tablero.
+let forced={}, forcedSig="";
+function calculate(opts={}){
   attempted=true;
   const errs=validate();
   if(errs.length){
@@ -528,16 +562,35 @@ function calculate(){
     if(!$("rows").children.length)addRow();
     $("rows").lastElementChild.querySelector(".n").focus();return;
   }
+  const sig=JSON.stringify([pieces.map(({color,...p})=>p),{...cfg,price:null}]);
+  if(sig!==forcedSig){forced={};forcedSig=sig}
+  cfg.force=forced;
   const t0=performance.now();
   const r=optimize(pieces,cfg);
   r.ms=performance.now()-t0;r.cfg=cfg;r.pieces=pieces;
   lastResult=r;render(r);save();
   const used=r.boards.reduce((s,b)=>s+b.placed.reduce((a,p)=>a+p.w*p.h,0),0);
   const pct=r.boards.length?used/(r.boards.length*cfg.W*cfg.H)*100:0;
-  toast(`Plan listo: ${r.boards.length} tablero${r.boards.length===1?"":"s"}, ${pct.toFixed(1)}% de aprovechamiento${r.total!=null?` · total ${money(r.total)}`:""}${r.unplaced.length?` · ${r.unplaced.length} sin colocar`:""}.`,{type:r.unplaced.length?"error":"info",timeout:4000});
+  toast(`${opts.msg?opts.msg+" · ":""}Plan listo: ${r.boards.length} tablero${r.boards.length===1?"":"s"}, ${pct.toFixed(1)}% de aprovechamiento${r.total!=null?` · total ${money(r.total)}`:""}${r.unplaced.length?` · ${r.unplaced.length} sin colocar`:""}.`,{type:r.unplaced.length?"error":"info",timeout:4000});
   // en el celular el resultado queda debajo del formulario: llevar al usuario hasta él
   // (el foco va primero y el scroll en el frame siguiente; si no, Chrome cancela el scroll suave)
-  if(isMobile()){$("out").focus({preventScroll:true});requestAnimationFrame(()=>$("out").scrollIntoView({behavior:"smooth",block:"start"}))}
+  if(isMobile()&&!opts.noScroll){$("out").focus({preventScroll:true});requestAnimationFrame(()=>$("out").scrollIntoView({behavior:"smooth",block:"start"}))}
+}
+function rotatePiece(key){
+  const r=lastResult;if(!r)return;
+  let p=null;
+  for(const b of r.boards)for(const q of b.placed)if(`${q.item.id}:${q.item.n}`===key)p=q;
+  if(!p)return;
+  const it=p.item, cfg=r.cfg, uw=cfg.W-2*cfg.margin, uh=cfg.H-2*cfg.margin;
+  if(cfg.grain&&it.g){toast(`«${it.name}» tiene la veta ${GRAIN_TXT[it.g]}: no se puede girar sin cruzarla. Cambiá la veta a «—» para girarla.`,{type:"error",timeout:7000});return}
+  if(it.w===it.h){toast(`«${it.name}» es cuadrada: girarla no cambia nada.`);return}
+  const [w,h]=p.rot?[it.w,it.h]:[it.h,it.w];
+  if(w>uw||h>uh){toast(`«${it.name}» no entra girada en el tablero.`,{type:"error"});return}
+  forced[key]=!p.rot;
+  calculate({noScroll:true,msg:`«${it.name}» girada`});
+  // mantener el foco en la misma pieza para seguir usando el teclado
+  const g=$("out").querySelector(`.piece[data-key="${key}"]`);
+  if(g)g.focus({preventScroll:true});
 }
 function render(r){
   const {cfg}=r, boardArea=cfg.W*cfg.H;
@@ -568,7 +621,9 @@ function render(r){
     <button id="print">${icon("print")}Imprimir / PDF</button>
     <button id="exportCsv">${icon("download")}Exportar cortes (CSV)</button>
     <button id="lbl" aria-pressed="${showLabels}">${icon("ruler")}${showLabels?"Ocultar":"Mostrar"} medidas</button>
-  </div>`;
+    ${Object.keys(forced).length?`<button id="resetRot">${icon("rotate")}Deshacer giros (${Object.keys(forced).length})</button>`:""}
+  </div>
+  <div class="hint rotate-hint">Tocá una pieza del plano para girarla 90°: el plan se reacomoda solo.${cfg.grain?" Las piezas con veta ↔ o ↕ no se giran.":""}</div>`;
   if($("project").value)h=`<h2 style="margin-top:0">${esc($("project").value)}</h2>`+h;
   r.boards.forEach((b,i)=>{
     const u=b.placed.reduce((a,p)=>a+p.w*p.h,0);
@@ -583,12 +638,13 @@ function render(r){
   $("print").onclick=()=>window.print();
   $("exportCsv").onclick=exportCSV;
   $("lbl").onclick=()=>{showLabels=!showLabels;render(r);$("lbl").focus()};
+  if($("resetRot"))$("resetRot").onclick=()=>{forced={};calculate({noScroll:true,msg:"Giros deshechos"});$("lbl").focus()};
   $("editBtn").onclick=()=>{$("pieces-title").scrollIntoView({behavior:"smooth"});($("rows").querySelector(".n")||$("add")).focus({preventScroll:true})};
 }
 let showLabels=true;
 function boardSVG(b,cfg,i){
   const pad=Math.max(cfg.W,cfg.H)*0.035, fs=Math.max(cfg.W,cfg.H)*0.018, hatch=`hatch-${i}`;
-  let s=`<svg viewBox="${-pad} ${-pad} ${cfg.W+pad*2} ${cfg.H+pad*2}" xmlns="http://www.w3.org/2000/svg" font-family="ui-monospace,Menlo,monospace" role="img" aria-label="Tablero ${i+1}: ${b.placed.length} piezas">
+  let s=`<svg viewBox="${-pad} ${-pad} ${cfg.W+pad*2} ${cfg.H+pad*2}" xmlns="http://www.w3.org/2000/svg" font-family="ui-monospace,Menlo,monospace" role="group" aria-label="Tablero ${i+1}: ${b.placed.length} piezas">
     <defs><pattern id="${hatch}" width="${fs}" height="${fs}" patternUnits="userSpaceOnUse" patternTransform="rotate(45)">
       <line x1="0" y1="0" x2="0" y2="${fs}" stroke="var(--board-edge)" stroke-opacity=".25" stroke-width="${fs/4}"/></pattern></defs>
     <rect x="0" y="0" width="${cfg.W}" height="${cfg.H}" fill="var(--board)" stroke="var(--board-edge)" stroke-width="${fs/5}"/>
@@ -601,13 +657,18 @@ function boardSVG(b,cfg,i){
       <text x="${-pad*0.3}" y="${cfg.H/2}" text-anchor="middle" font-size="${fs*1.1}" fill="var(--muted)" transform="rotate(-90 ${-pad*0.3} ${cfg.H/2})">${cfg.H}</text>`;
   for(const p of b.placed){
     const x=p.x+cfg.margin,y=p.y+cfg.margin;
-    s+=`<g><title>${esc(p.item.name)} ${p.item.w}×${p.item.h}${p.rot?" (rotada)":""}</title>
-      <rect x="${x}" y="${y}" width="${p.w}" height="${p.h}" fill="${p.item.color}" fill-opacity=".85" stroke="#1d1b18" stroke-opacity=".6" stroke-width="${fs/8}"/>`;
+    const it=p.item, key=`${it.id}:${it.n}`, locked=cfg.grain&&it.g;
+    const desc=`${it.name} ${p.w}×${p.h}${p.rot?", rotada":""}${forced[key]!=null?", girada a mano":""}${locked?`, veta ${GRAIN_TXT[it.g]}`:""}`;
+    s+=`<g class="piece${locked?" locked":""}" data-key="${key}" role="button" tabindex="0" aria-label="${esc(desc)}. ${locked?"No se puede girar por la veta":"Girar 90°"}">
+      <title>${esc(desc)}${locked?"":" · clic para girar"}</title>
+      <rect class="body" x="${x}" y="${y}" width="${p.w}" height="${p.h}" fill="${it.color}" fill-opacity=".85" stroke="#1d1b18" stroke-opacity=".6" stroke-width="${fs/8}"/>`;
+    // la veta del tablero (horizontal) también se ve sobre cada pieza
+    if(cfg.grain)for(let gy=y+fs*0.9;gy<y+p.h-fs*0.3;gy+=fs*0.9)s+=`<line x1="${x+fs*0.2}" x2="${x+p.w-fs*0.2}" y1="${gy}" y2="${gy}" stroke="#1d1b18" stroke-opacity=".14" stroke-width="${fs/7}" pointer-events="none"/>`;
     s+=edgeLines(p,x,y,fs);
     if(showLabels){
       const f=Math.min(fs,p.w/7,p.h/3);
       if(f>fs*0.35){
-        s+=`<text x="${x+p.w/2}" y="${y+p.h/2-f*0.2}" text-anchor="middle" font-size="${f}" font-weight="700" fill="#1d1b18">${esc(p.item.name)}${p.rot?" ↻":""}</text>
+        s+=`<text x="${x+p.w/2}" y="${y+p.h/2-f*0.2}" text-anchor="middle" font-size="${f}" font-weight="700" fill="#1d1b18">${esc(p.item.name)}</text>
             <text x="${x+p.w/2}" y="${y+p.h/2+f*1.0}" text-anchor="middle" font-size="${f*0.85}" fill="#1d1b18">${p.w}×${p.h}</text>`;
       }
     }
@@ -674,6 +735,11 @@ function exportCSV(){
 
 // ---------- eventos ----------
 const EMPTY_HTML=$("out").innerHTML;
+$("out").addEventListener("click",e=>{const g=e.target.closest(".piece");if(g)rotatePiece(g.dataset.key)});
+$("out").addEventListener("keydown",e=>{
+  const g=e.target.closest(".piece");
+  if(g&&(e.key==="Enter"||e.key===" ")){e.preventDefault();rotatePiece(g.dataset.key)}
+});
 function showEmpty(){
   $("out").innerHTML=EMPTY_HTML;
   $("emptyAdd").onclick=()=>{addAndFocus();$("pieces-title").scrollIntoView({behavior:"smooth"})};
@@ -702,7 +768,7 @@ $("importBtn").onclick=()=>{
   for(const l of lines){
     const c=l.split(/[;,\t]/).map(s=>s.trim());
     if(c.length<3||!(+c[1]>0)||!(+c[2]>0))continue;
-    addRow({name:c[0],w:+c[1],h:+c[2],q:parseInt(c[3])||1,g:/^(1|si|sí|true|v)$/i.test(c[4]||""),e:parseEdges(c[5])});n++;
+    addRow({name:c[0],w:+c[1],h:+c[2],q:parseInt(c[3])||1,g:parseGrain(c[4]),e:parseEdges(c[5])});n++;
   }
   const skipped=lines.length-n;
   if(!n){toast("No se encontró ninguna línea válida. Formato: nombre,ancho,alto,cantidad",{type:"error",timeout:7000});return}

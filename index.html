@@ -87,7 +87,8 @@
       <div><label for="margin" title="Borde que se descarta alrededor del tablero">Margen (mm)</label><input type="number" id="margin" value="0" min="0" inputmode="numeric" aria-describedby="margin-err"><span class="err" id="margin-err"></span></div>
       <div><label for="maxb">Máx. tableros</label><input type="number" id="maxb" placeholder="∞" min="1" inputmode="numeric" aria-describedby="maxb-err"><span class="err" id="maxb-err"></span></div>
     </div>
-    <label class="toggle"><input type="checkbox" id="grain"> Tablero con veta / fibra (horizontal)</label>
+    <label class="toggle"><input type="checkbox" id="grain" aria-describedby="grain-hint"> Tablero con veta</label>
+    <div class="hint" id="grain-hint">La veta del tablero corre a lo largo del ancho. En cada pieza elegí en <b>Veta</b> si va a lo ancho (↔) o a lo alto (↕); con «—» la pieza se puede girar.</div>
   </fieldset>
 
   <h2 id="edge-title">Tapacanto</h2>
@@ -101,14 +102,14 @@
 
   <h2 id="pieces-title">Piezas a cortar</h2>
   <table class="pieces" aria-labelledby="pieces-title">
-    <thead><tr><th><span class="sr-only">Color</span></th><th scope="col">Nombre</th><th scope="col">Ancho</th><th scope="col">Alto</th><th scope="col">Cant.</th><th scope="col" title="Respetar veta (no rotar)">Veta</th><th scope="col" title="Lados con tapacanto">Canto</th><th><span class="sr-only">Quitar</span></th></tr></thead>
+    <thead><tr><th><span class="sr-only">Color</span></th><th scope="col">Nombre</th><th scope="col">Ancho</th><th scope="col">Alto</th><th scope="col">Cant.</th><th scope="col" title="Dirección de la veta en la pieza">Veta</th><th scope="col" title="Lados con tapacanto">Canto</th><th><span class="sr-only">Quitar</span></th></tr></thead>
     <tbody id="rows"></tbody>
   </table>
   <div class="err" id="rows-err"></div>
   <button class="ghost" id="add">+ Añadir pieza</button>
 
   <h2 id="csv-title">Importar CSV</h2>
-  <div class="hint" id="csv-hint">Formato: nombre,ancho,alto,cantidad[,veta][,canto] (una por línea). Canto: lados con S, I, Z, D (superior, inferior, izquierdo, derecho) o T para todos.</div>
+  <div class="hint" id="csv-hint">Formato: nombre,ancho,alto,cantidad[,veta][,canto] (una por línea). Veta: ancho o alto. Canto: lados con S, I, Z, D (superior, inferior, izquierdo, derecho) o T para todos.</div>
   <textarea id="csv" rows="4" aria-labelledby="csv-title" aria-describedby="csv-hint" placeholder="Lateral,600,2100,2&#10;Puerta,400,700,4&#10;Estante,560,300,3"></textarea>
   <button class="full" id="importBtn">Importar CSV</button>
 

@@ -167,3 +167,17 @@ button.icon{padding:6px 8px;flex:none}
 #shareBtn svg{margin-right:2px}
 .pop.share{width:300px}
 .pop.share input[type=text]{margin-top:10px;font-size:11px;color:var(--muted)}
+
+/* veta */
+table.pieces select.g{padding:4px 2px;border:1px solid var(--line);border-radius:6px;background:var(--bg);color:var(--ink);font:13px ui-monospace,Menlo,monospace;width:42px;text-align:center}
+table.pieces select.g:focus-visible{outline:2px solid var(--focus);outline-offset:-1px}
+aside:has(#grain:not(:checked)) table.pieces select.g{opacity:.55}
+
+/* giro de piezas en el plano */
+.piece{cursor:pointer;outline:none}
+.piece .body{transition:fill-opacity .12s}
+.piece:hover .body{fill-opacity:1}
+.piece:focus-visible .body{stroke:var(--focus);stroke-opacity:1;stroke-width:3px;vector-effect:non-scaling-stroke}
+.piece.locked{cursor:not-allowed}
+.rotate-hint{margin:-6px 0 12px}
+@media print{.rotate-hint{display:none}}
