@@ -61,6 +61,7 @@
     <h1>plan<span>de</span>corte</h1>
     <small>Optimizador de corte de tableros</small>
   </div>
+  <button type="button" class="hdr-manual" id="hdrManual" hidden>Plan modificado a mano</button>
 </header>
 <div class="layout">
 <aside aria-label="Datos del proyecto">
@@ -76,7 +77,7 @@
   <input type="text" id="project" placeholder="Nombre del proyecto…" autocomplete="off" maxlength="120">
   <div class="projactions">
     <button type="button" id="shareBtn" aria-haspopup="dialog" aria-expanded="false" aria-controls="sharePop">Compartir por link</button>
-    <button type="button" id="resetBtn" title="Vaciar piezas, giros y resultado de este proyecto">Reiniciar</button>
+    <button type="button" id="resetBtn" title="Vaciar piezas, giros y resultado de este proyecto" aria-haspopup="dialog" aria-expanded="false" aria-controls="resetPop">Reiniciar</button>
   </div>
 
   <h2 id="board-title">Tablero</h2>
@@ -162,6 +163,11 @@
   <div class="hint manual-note" id="shareManual" hidden></div>
   <div class="hint">El link lleva el proyecto adentro: no se guarda en ningún servidor. Quien lo abra recibe una copia.</div>
   <div class="pop-actions"><button type="button" class="ok" id="shareCopy">Copiar link</button><button type="button" id="shareNative" hidden>Enviar…</button><button type="button" id="shareClose">Cerrar</button></div>
+</div>
+<div class="pop confirm" id="resetPop" role="alertdialog" aria-modal="false" aria-labelledby="resetPop-title" aria-describedby="resetPop-desc" hidden>
+  <div class="pop-title" id="resetPop-title">¿Reiniciar el proyecto?</div>
+  <p class="confirm-desc" id="resetPop-desc"></p>
+  <div class="pop-actions"><button type="button" id="resetCancel">Cancelar</button><button type="button" class="danger" id="resetYes">Sí, reiniciar</button></div>
 </div>
 <div class="tip" id="pieceTip" role="alert" hidden></div>
 <div class="toasts" id="toasts" role="status" aria-live="polite"></div>

@@ -68,6 +68,7 @@ function openEdgePop(btn){
 function positionPop(){
   if(popBtn&&!$("edgePop").hidden)placePop($("edgePop"),popBtn);
   if(!$("sharePop").hidden)placePop($("sharePop"),$("shareBtn"));
+  if(!$("resetPop").hidden)placePop($("resetPop"),$("resetBtn"));
 }
 // Ubica un panel flotante pegado al botón que lo abrió, sin salirse de la pantalla
 function placePop(pop,btn){
@@ -375,11 +376,30 @@ function duplicateProject(){
 }
 // Vacía el proyecto abierto (piezas, giros a mano, resultado y CSV pegado);
 // conserva nombre, tablero, canto y precios. Se puede deshacer.
-function resetProject(){
+// Pide confirmación en un panel junto al botón antes de vaciar el proyecto
+function openResetConfirm(){
   closeEdgePop(false);closeShare(false);hideTip();
   save();
+  const st=state(), n=st.rows.length, m=manualCount();
+  if(!n&&!m&&!lastResult&&!$("csv").value.trim()){toast("El proyecto ya está vacío.");return}
+  const name=st.project.trim();
+  const parts=[`${n} pieza${n===1?"":"s"}`];
+  if(m)parts.push(girosTxt(m));
+  if(lastResult)parts.push("el plan calculado");
+  $("resetPop-desc").textContent=`Se van a borrar ${parts.join(", ").replace(/, ([^,]*)$/," y $1")}${name?` de «${name}»`:""}. Se conservan el nombre, el tablero, el canto y los precios.`;
+  const pop=$("resetPop");pop.hidden=false;
+  $("resetBtn").setAttribute("aria-expanded","true");
+  placePop(pop,$("resetBtn"));
+  $("resetCancel").focus({preventScroll:true});
+}
+function closeResetConfirm(refocus=true){
+  if($("resetPop").hidden)return;
+  $("resetPop").hidden=true;$("resetBtn").setAttribute("aria-expanded","false");
+  if(refocus)$("resetBtn").focus();
+}
+function resetProject(){
+  closeResetConfirm(false);
   const before=state(), csv=$("csv").value;
-  if(!before.rows.length&&!before.manual&&!lastResult&&!csv.trim()){toast("El proyecto ya está vacío.");return}
   applyState({...before,rows:[],manual:null});$("csv").value="";save();
   $("add").focus();
   toast("Proyecto reiniciado: se vaciaron las piezas, los giros y el resultado.",{timeout:9000,action:{label:"Deshacer",fn:()=>{
@@ -675,7 +695,7 @@ function render(r){
     const names=[...new Set(r.unplaced.map(u=>`${u.name} (${u.w}×${u.h})`))].join(", ");
     h+=`<div class="warn"><b>${r.unplaced.length} pieza(s) sin colocar:</b> ${esc(names)}. ${cfg.maxB<Infinity?"Se alcanzó el máximo de tableros o ":""}la pieza no cabe en el tablero.</div>`;
   }
-  if(manualCount())h+=`<div class="manual" role="note">${icon("alert")}<div class="manual-txt"><strong>Plan modificado a mano</strong><span>${girosTxt(manualCount())}. Esas piezas tienen borde punteado; el resto lo acomodó el optimizador.</span></div><button id="resetRot2">${icon("rotate")}Volver al plan automático</button></div>`;
+  if(manualCount())h+=`<div class="manual" role="note">${icon("alert")}<div class="manual-txt"><strong>Plan modificado a mano</strong><span>${girosTxt(manualCount())}. Esas piezas tienen borde punteado amarillo y negro; el resto lo acomodó el optimizador.</span></div><button id="resetRot2">${icon("rotate")}Volver al plan automático</button></div>`;
   h+=`<div class="stats">
     <div class="stat"><b>${r.boards.length}</b><span>Tableros</span></div>
     <div class="stat"><b>${nPieces}</b><span>Piezas colocadas</span></div>
@@ -706,6 +726,8 @@ function render(r){
   });
   h+=`<div class="hint">Calculado en ${r.ms.toFixed(0)} ms · mejor estrategia: ${r.algo}</div>`;
   $("out").innerHTML=h;
+  $("hdrManual").hidden=!manualCount();
+  $("hdrManual").innerHTML=`${icon("alert")}Plan modificado a mano`;
   $("print").onclick=()=>window.print();
   $("exportCsv").onclick=exportCSV;
   $("lbl").onclick=()=>{showLabels=!showLabels;render(r);$("lbl").focus()};
@@ -740,7 +762,11 @@ function boardSVG(b,cfg,i){
     // la veta del tablero (horizontal) también se ve sobre cada pieza
     if(cfg.grain)for(let gy=y+fs*0.9;gy<y+p.h-fs*0.3;gy+=fs*0.9)s+=`<line x1="${x+fs*0.2}" x2="${x+p.w-fs*0.2}" y1="${gy}" y2="${gy}" stroke="#1d1b18" stroke-opacity=".14" stroke-width="${fs/7}" pointer-events="none"/>`;
     s+=edgeLines(p,x,y,fs);
-    if(forced[key]!=null)s+=`<rect x="${x+fs*0.25}" y="${y+fs*0.25}" width="${Math.max(0,p.w-fs*0.5)}" height="${Math.max(0,p.h-fs*0.5)}" fill="none" stroke="#1d1b18" stroke-width="${fs/5}" stroke-dasharray="${fs*0.7} ${fs*0.45}" pointer-events="none"/>`;
+    if(forced[key]!=null){
+      const ox=x+fs*0.3, oy=y+fs*0.3, ow=Math.max(0,p.w-fs*0.6), oh=Math.max(0,p.h-fs*0.6);
+      s+=`<rect x="${ox}" y="${oy}" width="${ow}" height="${oh}" fill="none" stroke="#1d1b18" stroke-width="${fs/2.5}" pointer-events="none"/>
+        <rect x="${ox}" y="${oy}" width="${ow}" height="${oh}" fill="none" stroke="#f5b301" stroke-width="${fs/2.5}" stroke-dasharray="${fs*0.8} ${fs*0.5}" pointer-events="none"/>`;
+    }
     // Etiqueta (nombre y medida de la pieza, sin importar el giro) e ícono de giro.
     // En piezas grandes el ícono va al centro, grande, con la etiqueta debajo;
     // en las chicas, en la esquina. La etiqueta va a lo largo del lado más largo.
@@ -836,6 +862,7 @@ $("out").addEventListener("keydown",e=>{
 });
 function showEmpty(){
   $("out").innerHTML=EMPTY_HTML;
+  $("hdrManual").hidden=true;
   $("emptyAdd").onclick=()=>{addAndFocus();$("pieces-title").scrollIntoView({behavior:"smooth"})};
 }
 const addAndFocus=()=>{addRow();save();$("rows").lastElementChild.querySelector(".n").focus()};
@@ -846,7 +873,10 @@ $("projSel").onchange=e=>switchProject(e.target.value);
 $("projNew").onclick=newProject;
 $("projDup").onclick=duplicateProject;
 $("projDel").onclick=deleteProject;
-$("resetBtn").onclick=resetProject;
+$("resetBtn").onclick=()=>$("resetPop").hidden?openResetConfirm():closeResetConfirm();
+$("resetCancel").onclick=()=>closeResetConfirm();
+$("resetYes").onclick=resetProject;
+$("hdrManual").onclick=()=>{const m=document.querySelector(".manual");if(m){m.scrollIntoView({behavior:"smooth",block:"start"});$("resetRot2")?.focus({preventScroll:true})}};
 $("resetBtn").insertAdjacentHTML("afterbegin",icon("reset"));
 $("shareBtn").onclick=()=>$("sharePop").hidden?openShare():closeShare();
 $("shareP").onchange=refreshShare;
@@ -877,6 +907,7 @@ document.addEventListener("keydown",e=>{
   else if(e.key==="Escape"&&!$("edgePop").hidden){e.preventDefault();closeEdgePop()}
   else if(e.key==="Escape"&&!$("sharePop").hidden){e.preventDefault();closeShare()}
   else if(e.key==="Escape"&&!$("pieceTip").hidden){e.preventDefault();hideTip()}
+  else if(e.key==="Escape"&&!$("resetPop").hidden){e.preventDefault();closeResetConfirm()}
 });
 $("edgePop").addEventListener("change",()=>{syncPopGlyph();applyPop()});
 $("edgeAll").onclick=()=>{$("edgePop").querySelectorAll("input").forEach(c=>c.checked=true);syncPopGlyph();applyPop()};
@@ -886,6 +917,7 @@ $("edgeOk").onclick=()=>closeEdgePop();
 document.addEventListener("pointerdown",e=>{
   if(popBtn&&!$("edgePop").contains(e.target)&&!popBtn.contains(e.target))closeEdgePop(false);
   if(!$("sharePop").hidden&&!$("sharePop").contains(e.target)&&!$("shareBtn").contains(e.target))closeShare(false);
+  if(!$("resetPop").hidden&&!$("resetPop").contains(e.target)&&!$("resetBtn").contains(e.target))closeResetConfirm(false);
 });
 $("edgePop").addEventListener("focusout",e=>{if(popBtn&&e.relatedTarget&&!$("edgePop").contains(e.relatedTarget)&&e.relatedTarget!==popBtn)closeEdgePop(false)});
 // seguir al botón al hacer scroll o cuando el celular cambia el alto de la pantalla
