@@ -12,6 +12,7 @@ function testSet(){
   return Instances.suite(setName.split(":")[0],+(setName.split(":")[1]||20));
 }
 var STRATS={
+  nolazy:{schedule:[{guide:4,lbTerm:false,lazy:false}]},
   def:{},
   rec:{recombine:true},
   g4lns:{schedule:[{guide:4,lbTerm:false}],lnsShare:0.3},

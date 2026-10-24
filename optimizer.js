@@ -56,7 +56,7 @@ function selectTop(idx,n,key,m){
 function beam(P,B,deadline,opt){
   const BW=P.BW,BH=P.BH,k=P.k,T=P.T,nT=T.length,BA=BW*BH;
   const guideId=opt.guide||0, stack=opt.stack!==false, frames=opt.frames||[0,1];
-  const nFr=frames.length, lbTerm=opt.lbTerm!==false, maxBins=opt.maxBins||Infinity, dom=opt.dominance!==false;
+  const nFr=frames.length, lbTerm=opt.lbTerm!==false, maxBins=opt.maxBins||Infinity, dom=opt.dominance!==false, lazy=opt.lazy!==false;
   // valor guía (menor es mejor). 0: desperdicio/área colocada; 3: área consumida/área colocada;
   // 4: proporción de desperdicio / área media colocada (prioriza piezas grandes), como PackingSolver.
   const guide=(waste,cons,placed,ar,nPl)=>{
@@ -110,18 +110,22 @@ function beam(P,B,deadline,opt){
       const FW=fr?BH:BW,FH=fr?BW:BH;
       let fit=false;
       if(bins>0){
-        for(let t=0;t<nT;t++){
-          if(!cur.rem[ro+t])continue;
-          const ar=AR[t],placed=placed0+ar,remA=remA0-ar;
-          for(let o=0;o<NO[t];o++){
-            const w=fr?OH[t*2+o]:OW[t*2+o],h=fr?OW[t*2+o]:OH[t*2+o];
-            for(let kind=1;kind<=4;kind++){
+        // Como PackingSolver: no se abre un bloque nuevo si alguna pieza entra en el bloque
+        // actual sin agrandarlo, ni una tira nueva si alguna entra en la tira sin ensancharla.
+        let keepBlock=false,keepStrip=false;
+        const gen=kind=>{
+          for(let t=0;t<nT;t++){
+            if(!cur.rem[ro+t])continue;
+            const ar=AR[t],placed=placed0+ar,remA=remA0-ar;
+            for(let o=0;o<NO[t];o++){
+              const w=fr?OH[t*2+o]:OW[t*2+o],h=fr?OW[t*2+o]:OH[t*2+o];
               let n1p=x1p,n1c=x1c,n2p=y2p,n2c=y2c,n3p=x3p,n3c=x3c,n4c=y4c;
               if(kind===1){if(!(x3c+k+w<=FW+EPS&&y2p+h<=FH+EPS))continue;n3p=x3c+k;n3c=n3p+w;if(n3c>n1c)n1c=n3c;if(y2p+h>n2c)n2c=y2p+h;n4c=y2p+h}
               else if(kind===2){if(!(y2c+k+h<=FH+EPS&&x1p+w<=FW+EPS))continue;n2p=y2c+k;n2c=n2p+h;n3p=x1p;n3c=x1p+w;if(n3c>n1c)n1c=n3c;n4c=n2c}
               else if(kind===3){if(!(x1c+k+w<=FW+EPS&&h<=FH+EPS))continue;n1p=x1c+k;n1c=n1p+w;n2p=0;n2c=h;n3p=n1p;n3c=n1c;n4c=h}
               else{if(!(stack&&w<=x3c-x3p+EPS&&y4c+k+h<=y2c+EPS))continue;n4c=y4c+k+h}
               fit=true;
+              if(kind!==3&&n1c<=x1c+EPS){keepStrip=true;if(kind!==2&&n2c<=y2c+EPS)keepBlock=true}
               const cov=n1p*FH+(n1c-n1p)*n2p+(n3p-n1p)*(n2c-n2p)+(n3c-n3p)*(n4c-n2p);
               const cons=(bins-1)*BA+cov,waste=cons-placed;
               const lb=bins-1+Math.ceil((cov+remA)/BA-1e-9);
@@ -131,7 +135,10 @@ function beam(P,B,deadline,opt){
               cP[nc]=i;cT[nc]=t;cO[nc]=o;cK[nc]=kind===4?6:kind;cG[nc]=(lbTerm?lb*1e6:0)+g;nc++;
             }
           }
-        }
+        };
+        gen(1);gen(4);
+        if(!lazy||!keepBlock)gen(2);
+        if(!lazy||!keepStrip)gen(3);
       }
       if(!fit){ // tablero nuevo: sólo si no entra nada más en el actual
         for(let t=0;t<nT;t++){
