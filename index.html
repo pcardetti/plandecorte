@@ -74,7 +74,10 @@
   </div>
   <label for="project" class="sr-only">Nombre del proyecto</label>
   <input type="text" id="project" placeholder="Nombre del proyecto…" autocomplete="off" maxlength="120">
-  <button type="button" class="full" id="shareBtn" aria-haspopup="dialog" aria-expanded="false" aria-controls="sharePop">Compartir por link</button>
+  <div class="projactions">
+    <button type="button" id="shareBtn" aria-haspopup="dialog" aria-expanded="false" aria-controls="sharePop">Compartir por link</button>
+    <button type="button" id="resetBtn" title="Vaciar piezas, giros y resultado de este proyecto">Reiniciar</button>
+  </div>
 
   <h2 id="board-title">Tablero</h2>
   <fieldset class="box" aria-labelledby="board-title">

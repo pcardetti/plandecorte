@@ -8,6 +8,8 @@ const ICONS={
   ruler:'<path d="M21.3 15.3a2.4 2.4 0 0 1 0 3.4l-2.6 2.6a2.4 2.4 0 0 1-3.4 0L2.7 8.7a2.4 2.4 0 0 1 0-3.4l2.6-2.6a2.4 2.4 0 0 1 3.4 0Z"/><path d="m7.5 10.5 2-2M10.5 13.5l2-2M13.5 16.5l2-2"/>',
   edit:'<path d="M12 20h9"/><path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4Z"/>',
   plus:'<path d="M12 5v14M5 12h14"/>',
+  alert:'<path d="m21.7 18-8-14a2 2 0 0 0-3.4 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.7-3Z"/><path d="M12 9v4M12 17h.01"/>',
+  reset:'<path d="M3 12a9 9 0 1 0 9-9 9.8 9.8 0 0 0-6.7 2.7L3 8"/><path d="M3 3v5h5"/>',
   rotate:'<path d="M3 12a9 9 0 1 0 3-6.7L3 8"/><path d="M3 3v5h5"/>',
   copy:'<rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/>',
   trash:'<path d="M3 6h18"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6"/><path d="M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/>',
@@ -371,6 +373,19 @@ function duplicateProject(){
   applyState(db.items[db.current].data);renderProjSel();
   toast("Proyecto duplicado.");
 }
+// Vacía el proyecto abierto (piezas, giros a mano, resultado y CSV pegado);
+// conserva nombre, tablero, canto y precios. Se puede deshacer.
+function resetProject(){
+  closeEdgePop(false);closeShare(false);hideTip();
+  save();
+  const before=state(), csv=$("csv").value;
+  if(!before.rows.length&&!before.manual&&!lastResult&&!csv.trim()){toast("El proyecto ya está vacío.");return}
+  applyState({...before,rows:[],manual:null});$("csv").value="";save();
+  $("add").focus();
+  toast("Proyecto reiniciado: se vaciaron las piezas, los giros y el resultado.",{timeout:9000,action:{label:"Deshacer",fn:()=>{
+    applyState(before);$("csv").value=csv;save();noteManual();
+  }}});
+}
 function deleteProject(){
   const id=db.current, item=db.items[id], idx=db.order.indexOf(id);
   save();
@@ -660,7 +675,7 @@ function render(r){
     const names=[...new Set(r.unplaced.map(u=>`${u.name} (${u.w}×${u.h})`))].join(", ");
     h+=`<div class="warn"><b>${r.unplaced.length} pieza(s) sin colocar:</b> ${esc(names)}. ${cfg.maxB<Infinity?"Se alcanzó el máximo de tableros o ":""}la pieza no cabe en el tablero.</div>`;
   }
-  if(manualCount())h+=`<div class="manual" role="note"><span><b>Plan modificado a mano:</b> ${girosTxt(manualCount())}. Esas piezas tienen borde punteado; el resto lo acomodó el optimizador.</span><button id="resetRot2">${icon("rotate")}Volver al plan automático</button></div>`;
+  if(manualCount())h+=`<div class="manual" role="note">${icon("alert")}<div class="manual-txt"><strong>Plan modificado a mano</strong><span>${girosTxt(manualCount())}. Esas piezas tienen borde punteado; el resto lo acomodó el optimizador.</span></div><button id="resetRot2">${icon("rotate")}Volver al plan automático</button></div>`;
   h+=`<div class="stats">
     <div class="stat"><b>${r.boards.length}</b><span>Tableros</span></div>
     <div class="stat"><b>${nPieces}</b><span>Piezas colocadas</span></div>
@@ -682,7 +697,8 @@ function render(r){
   if($("project").value)h=`<h2 style="margin-top:0">${esc($("project").value)}</h2>`+h;
   r.boards.forEach((b,i)=>{
     const u=b.placed.reduce((a,p)=>a+p.w*p.h,0);
-    h+=`<div class="sheet"><h3>Tablero ${i+1} <small>${cfg.W} × ${cfg.H} mm · ${b.placed.length} piezas · ${(u/boardArea*100).toFixed(1)}% aprovechado</small></h3>
+    const manualHere=b.placed.filter(p=>forced[`${p.item.id}:${p.item.n}`]!=null).length;
+    h+=`<div class="sheet${manualHere?" has-manual":""}"><h3><span>Tablero ${i+1}${manualHere?` <span class="badge-manual">${icon("alert")}${manualHere} a mano</span>`:""}</span> <small>${cfg.W} × ${cfg.H} mm · ${b.placed.length} piezas · ${(u/boardArea*100).toFixed(1)}% aprovechado</small></h3>
       ${boardSVG(b,cfg,i)}
       <div class="tablewrap"><table class="list"><caption class="sr-only">Piezas del tablero ${i+1}</caption><thead><tr><th scope="col">#</th><th scope="col">Pieza</th><th scope="col">${anyCut?"Final":"Medida"}</th>${anyCut?'<th scope="col">Corte</th>':""}${anyEdge?'<th scope="col">Canto</th>':""}<th scope="col">Posición (x,y)</th><th scope="col">Rotada</th></tr></thead><tbody>
       ${b.placed.map((p,j)=>`<tr><td>${j+1}</td><td><span class="sw" style="background:${p.item.color}"></span>${esc(p.item.name)}</td><td>${p.item.fw} × ${p.item.fh}</td>${anyCut?`<td>${p.item.w} × ${p.item.h}</td>`:""}${anyEdge?`<td class="edges">${edgeText(p.item.e)}</td>`:""}<td>${p.x+cfg.margin}, ${p.y+cfg.margin}</td><td>${p.rot?"↻ sí":"—"}${forced[`${p.item.id}:${p.item.n}`]!=null?" · a mano":""}</td></tr>`).join("")}
@@ -725,22 +741,30 @@ function boardSVG(b,cfg,i){
     if(cfg.grain)for(let gy=y+fs*0.9;gy<y+p.h-fs*0.3;gy+=fs*0.9)s+=`<line x1="${x+fs*0.2}" x2="${x+p.w-fs*0.2}" y1="${gy}" y2="${gy}" stroke="#1d1b18" stroke-opacity=".14" stroke-width="${fs/7}" pointer-events="none"/>`;
     s+=edgeLines(p,x,y,fs);
     if(forced[key]!=null)s+=`<rect x="${x+fs*0.25}" y="${y+fs*0.25}" width="${Math.max(0,p.w-fs*0.5)}" height="${Math.max(0,p.h-fs*0.5)}" fill="none" stroke="#1d1b18" stroke-width="${fs/5}" stroke-dasharray="${fs*0.7} ${fs*0.45}" pointer-events="none"/>`;
-    if(showLabels){
-      // la etiqueta va a lo largo del lado más largo, así no desaparece en piezas
-      // angostas, y siempre muestra la medida de la pieza (ancho×alto), esté o no girada
-      const vertical=p.h>p.w*1.15, len=vertical?p.h:p.w, thick=vertical?p.w:p.h;
-      const chars=Math.max(it.name.length,`${it.w}×${it.h}`.length,6);
-      const f=Math.min(fs,len*0.85/(chars*0.62),thick/3);
-      if(f>fs*0.3){
-        const cx=x+p.w/2, cy=y+p.h/2, tr=vertical?` transform="rotate(-90 ${cx} ${cy})"`:"";
-        s+=`<g pointer-events="none"${tr}><text x="${cx}" y="${cy-f*0.2}" text-anchor="middle" font-size="${f}" font-weight="700" fill="#1d1b18">${esc(it.name)}</text>
-            <text x="${cx}" y="${cy+f*1.0}" text-anchor="middle" font-size="${f*0.85}" fill="#1d1b18">${it.w}×${it.h}</text></g>`;
-      }
+    // Etiqueta (nombre y medida de la pieza, sin importar el giro) e ícono de giro.
+    // En piezas grandes el ícono va al centro, grande, con la etiqueta debajo;
+    // en las chicas, en la esquina. La etiqueta va a lo largo del lado más largo.
+    const cx=x+p.w/2, cy=y+p.h/2, canRotate=!locked&&it.w!==it.h;
+    const vertical=p.h>p.w*1.15, len=vertical?p.h:p.w, thick=vertical?p.w:p.h;
+    const chars=Math.max(it.name.length,`${it.w}×${it.h}`.length,6);
+    const f=Math.min(fs,len*0.85/(chars*0.62),thick/3), hasLabel=showLabels&&f>fs*0.3;
+    // alto que ocupa la etiqueta en pantalla (horizontal: 2 renglones; vertical: el texto)
+    const labelExt=hasLabel?(vertical?chars*0.62*f:2.3*f):0;
+    const bigSz=Math.min(48*mmPerPx,Math.max(30*mmPerPx,Math.min(p.w,p.h)*0.22));
+    const gap=hasLabel?bigSz*0.25:0;
+    const big=canRotate&&bigSz<=p.w*0.8&&bigSz+gap+labelExt<=p.h*0.9;
+    const top=cy-(bigSz+gap+labelExt)/2;
+    const labelCy=big?top+bigSz+gap+labelExt/2:cy;
+    if(hasLabel){
+      const tr=vertical?` transform="rotate(-90 ${cx} ${labelCy})"`:"";
+      s+=`<g pointer-events="none"${tr}><text x="${cx}" y="${labelCy-f*0.2}" text-anchor="middle" font-size="${f}" font-weight="700" fill="#1d1b18">${esc(it.name)}</text>
+            <text x="${cx}" y="${labelCy+f*1.0}" text-anchor="middle" font-size="${f*0.85}" fill="#1d1b18">${it.w}×${it.h}</text></g>`;
     }
-    // ícono de giro en la esquina de las piezas que se pueden girar
-    if(!locked&&it.w!==it.h){
-      const sz=Math.min(22*mmPerPx,p.w*0.45,p.h*0.45), ip=Math.min(5*mmPerPx,sz*0.25);
-      if(sz>=12*mmPerPx)s+=`<svg class="rot-ico" x="${x+p.w-sz-ip}" y="${y+ip}" width="${sz}" height="${sz}" viewBox="0 0 24 24" pointer-events="none" aria-hidden="true"><circle cx="12" cy="12" r="12" fill="#fff" fill-opacity=".85"/><path d="M18.5 12a6.5 6.5 0 1 1-1.9-4.6" fill="none" stroke="#1d1b18" stroke-width="2.4" stroke-linecap="round"/><path d="M17.6 3.8v4.3h-4.3" fill="none" stroke="#1d1b18" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/></svg>`;
+    if(canRotate){
+      let sz,ix,iy;
+      if(big){sz=bigSz;ix=cx-sz/2;iy=top}
+      else{sz=Math.min(22*mmPerPx,p.w*0.45,p.h*0.45);const ip=Math.min(5*mmPerPx,sz*0.25);ix=x+p.w-sz-ip;iy=y+ip}
+      if(sz>=12*mmPerPx)s+=`<svg class="rot-ico${big?" big":""}" x="${ix}" y="${iy}" width="${sz}" height="${sz}" viewBox="0 0 24 24" pointer-events="none" aria-hidden="true"><circle cx="12" cy="12" r="12" fill="#fff" fill-opacity=".9"/><circle cx="12" cy="12" r="11.2" fill="none" stroke="#1d1b18" stroke-opacity=".35" stroke-width="1"/><path d="M18.5 12a6.5 6.5 0 1 1-1.9-4.6" fill="none" stroke="#1d1b18" stroke-width="2.4" stroke-linecap="round"/><path d="M17.6 3.8v4.3h-4.3" fill="none" stroke="#1d1b18" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/></svg>`;
     }
     s+=`</g>`;
   }
@@ -822,6 +846,8 @@ $("projSel").onchange=e=>switchProject(e.target.value);
 $("projNew").onclick=newProject;
 $("projDup").onclick=duplicateProject;
 $("projDel").onclick=deleteProject;
+$("resetBtn").onclick=resetProject;
+$("resetBtn").insertAdjacentHTML("afterbegin",icon("reset"));
 $("shareBtn").onclick=()=>$("sharePop").hidden?openShare():closeShare();
 $("shareP").onchange=refreshShare;
 $("shareCopy").onclick=copyShare;
