@@ -508,7 +508,7 @@ function stopWorker(){if(worker){worker.terminate();worker=null}clearInterval(de
 function startOptimize(pieces,cfg,ms,deep){
   stopWorker();
   try{worker=new Worker("optimizer-worker.js")}catch(e){worker=null}
-  job={id:++jobSeq,pieces,cfg,deep,t0:performance.now(),ms,from:lastResult?{boards:lastResult.boards.length,pct:usedPct(lastResult)}:null,better:false};
+  job={id:++jobSeq,pieces,cfg,deep,t0:performance.now(),ms,from:lastResult?{boards:lastResult.boards.length,pct:usedPct(lastResult),total:lastResult.total}:null,better:false};
   if(!worker){ // sin Worker: búsqueda corta en el hilo principal
     const sol=CutOptimizer.solve(pieces,cfg,{timeLimit:deep?3000:400});
     adopt(sol,job);finishOpt(job);return;
@@ -552,7 +552,8 @@ function finishOpt(my,failed,stopped){
   opt={state:failed?"failed":"done",deep:my.deep,better:my.better,stopped};
   if(r&&my.better&&my.from){
     const nb=r.boards.length;
-    if(nb<my.from.boards)toast(`Encontré un plan mejor: ${nb} tablero${nb===1?"":"s"} (antes ${my.from.boards}), ${usedPct(r).toFixed(1)}% de aprovechamiento.`,{timeout:6000});
+    const ahorro=r.total!=null&&my.from.total!=null&&my.from.total-r.total>0.5?` · total ${money(r.total)} (ahorrás ${money(my.from.total-r.total)})`:"";
+    if(nb<my.from.boards)toast(`Encontré un plan mejor: ${nb} tablero${nb===1?"":"s"} (antes ${my.from.boards}), ${usedPct(r).toFixed(1)}% de aprovechamiento${ahorro}.`,{timeout:7000});
     else if(my.deep)toast("La búsqueda a fondo mejoró el acomodo: el último tablero deja un retazo más grande.",{timeout:6000});
   }else if(r&&my.deep&&!failed)toast(stopped?"Búsqueda detenida: queda el mejor plan encontrado hasta ahora.":"Búsqueda a fondo terminada: no hay un plan mejor que este.",{timeout:5000});
   paintOptStatus();
