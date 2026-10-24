@@ -164,6 +164,7 @@ function validate(){
   field("ct",ct!=null&&ct<0?"No puede ser negativo":ct>10?"Revisá: más de 10 mm":"");
   field("cx",cx!=null&&cx<0?"No puede ser negativo":"");
   const t=ct>0?ct:0;
+  for(const k of PRICES){const v=num(k);field(k,v!=null&&!(v>=0)?"No puede ser negativo":"")}
 
   const uw=(W||0)-2*(margin||0), uh=(H||0)-2*(margin||0), grain=$("grain").checked;
   const rowMsgs=[];
@@ -193,6 +194,8 @@ function validate(){
   return errs;
 }
 function esc(s){return String(s??"").replace(/[&<>"]/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]))}
+const PRICES=["pb","pe","pc","po","pg"];
+const money=v=>"$ "+v.toLocaleString("es-AR",{minimumFractionDigits:2,maximumFractionDigits:2});
 // Medida de corte: la final menos el espesor del canto en cada lado que lo lleva.
 // Se redondea a 0,1 mm para no arrastrar decimales de coma flotante.
 function cutSize(w,h,e,t){
@@ -222,10 +225,11 @@ function readPieces(){
 function readCfg(){
   return {W:+$("bw").value,H:+$("bh").value,kerf:Math.max(0,+$("kerf").value||0),
     margin:Math.max(0,+$("margin").value||0),maxB:parseInt($("maxb").value)||Infinity,grain:$("grain").checked,
-    ct:Math.max(0,+$("ct").value||0),cx:Math.max(0,+$("cx").value||0)};
+    ct:Math.max(0,+$("ct").value||0),cx:Math.max(0,+$("cx").value||0),
+    price:Object.fromEntries(PRICES.map(k=>[k,Math.max(0,+$(k).value||0)]))};
 }
 function save(){
-  try{localStorage.setItem(STORE,JSON.stringify({project:$("project").value,cfg:{bw:$("bw").value,bh:$("bh").value,kerf:$("kerf").value,margin:$("margin").value,maxb:$("maxb").value,grain:$("grain").checked,ct:$("ct").value,cx:$("cx").value},
+  try{localStorage.setItem(STORE,JSON.stringify({project:$("project").value,cfg:{bw:$("bw").value,bh:$("bh").value,kerf:$("kerf").value,margin:$("margin").value,maxb:$("maxb").value,grain:$("grain").checked,ct:$("ct").value,cx:$("cx").value,...Object.fromEntries(PRICES.map(k=>[k,$(k).value]))},
     rows:[...$("rows").children].map(rowData)}))}catch(e){}
 }
 function load(){
@@ -233,7 +237,8 @@ function load(){
   if(s&&typeof s==="object"){
     const cfg=s.cfg||{};
     $("project").value=s.project||"";
-    for(const k of ["bw","bh","kerf","margin","maxb","ct","cx"])if(cfg[k]!=null)$(k).value=cfg[k];
+    for(const k of ["bw","bh","kerf","margin","maxb","ct","cx",...PRICES])if(cfg[k]!=null)$(k).value=cfg[k];
+    if(PRICES.some(k=>+cfg[k]>0))$("budget").open=true;
     $("grain").checked=!!cfg.grain;
     if(Array.isArray(s.rows))s.rows.forEach(r=>addRow({name:"",w:"",h:"",q:1,g:false,e:"0000",...r}));
   }
@@ -248,7 +253,7 @@ function pack(pieces,cfg,sortFn,fitRule,splitRule){
   for(const p of pieces)for(let k=0;k<p.q;k++)items.push({...p,n:k+1});
   items.sort(sortFn);
   const boards=[], unplaced=[];
-  const newBoard=()=>({free:[{x:0,y:0,w:uw,h:uh}],placed:[]});
+  const newBoard=()=>({free:[{x:0,y:0,w:uw,h:uh}],placed:[],cuts:0});
   for(const it of items){
     const canRot=!(cfg.grain&&it.g);
     const orients=[[it.w,it.h,false]];
@@ -271,6 +276,8 @@ function pack(pieces,cfg,sortFn,fitRule,splitRule){
     }
     const b=boards[best.bi], f=b.free[best.fi];
     b.placed.push({x:f.x,y:f.y,w:best.w,h:best.h,rot:best.rot,item:it});
+    // un corte por cada lado de la pieza que no coincide con el borde del espacio libre
+    b.cuts+=(f.w>best.w)+(f.h>best.h);
     b.free.splice(best.fi,1);
     const k=cfg.kerf, rw=f.w-best.w-k, rh=f.h-best.h-k;
     // Dos formas de cortar con guillotina el sobrante en L
@@ -344,7 +351,7 @@ function calculate(){
   lastResult=r;render(r);save();
   const used=r.boards.reduce((s,b)=>s+b.placed.reduce((a,p)=>a+p.w*p.h,0),0);
   const pct=r.boards.length?used/(r.boards.length*cfg.W*cfg.H)*100:0;
-  toast(`Plan listo: ${r.boards.length} tablero${r.boards.length===1?"":"s"}, ${pct.toFixed(1)}% de aprovechamiento${r.unplaced.length?` · ${r.unplaced.length} sin colocar`:""}.`,{type:r.unplaced.length?"error":"info",timeout:4000});
+  toast(`Plan listo: ${r.boards.length} tablero${r.boards.length===1?"":"s"}, ${pct.toFixed(1)}% de aprovechamiento${r.total!=null?` · total ${money(r.total)}`:""}${r.unplaced.length?` · ${r.unplaced.length} sin colocar`:""}.`,{type:r.unplaced.length?"error":"info",timeout:4000});
   // en el celular el resultado queda debajo del formulario: llevar al usuario hasta él
   // (el foco va primero y el scroll en el frame siguiente; si no, Chrome cancela el scroll suave)
   if(isMobile()){$("out").focus({preventScroll:true});requestAnimationFrame(()=>$("out").scrollIntoView({behavior:"smooth",block:"start"}))}
@@ -356,6 +363,7 @@ function render(r){
   const nPieces=r.boards.reduce((s,b)=>s+b.placed.length,0);
   const pct=total?used/total*100:0;
   const edgeTotal=r.boards.reduce((s,b)=>s+b.placed.reduce((a,p)=>a+p.item.em,0),0);
+  const cuts=r.boards.reduce((s,b)=>s+b.cuts,0);
   const anyEdge=edgeTotal>0, anyCut=r.boards.some(b=>b.placed.some(p=>p.item.w!==p.item.fw||p.item.h!==p.item.fh));
   let h="";
   if(r.unplaced.length){
@@ -369,7 +377,9 @@ function render(r){
     <div class="stat"><b>${((total-used)/1e6).toFixed(2)} m²</b><span>Desperdicio</span></div>
     <div class="stat"><b>${(used/1e6).toFixed(2)} m²</b><span>Superficie útil</span></div>
     ${edgeTotal>0?`<div class="stat"><b>${edgeTotal.toFixed(2)} m</b><span>Tapacanto</span></div>`:""}
+    <div class="stat"><b>${cuts}</b><span>Cortes</span></div>
   </div>
+  ${quoteHTML(r,edgeTotal,cuts)}
   <div class="toolbar">
     <button class="edit" id="editBtn">${icon("edit")}Editar piezas</button>
     <button id="print">${icon("print")}Imprimir / PDF</button>
@@ -421,6 +431,30 @@ function boardSVG(b,cfg,i){
     s+=`</g>`;
   }
   return s+"</svg>";
+}
+// Desglose del presupuesto; sólo aparece si se cargó algún precio
+function quote(r,edgeTotal,cuts){
+  const p=r.cfg.price;
+  const lines=[
+    {k:"pb",label:"Tableros",d:`${r.boards.length} × ${money(p.pb)}`,v:r.boards.length*p.pb},
+    {k:"pe",label:"Tapacanto",d:`${edgeTotal.toFixed(2)} m × ${money(p.pe)}`,v:edgeTotal*p.pe},
+    {k:"pc",label:"Cortes",d:`${cuts} × ${money(p.pc)}`,v:cuts*p.pc},
+    {k:"po",label:"Otros costos",d:"",v:p.po},
+  ].filter(l=>p[l.k]>0);
+  const sub=lines.reduce((s,l)=>s+l.v,0), gain=sub*p.pg/100;
+  return {lines,sub,gain,total:sub+gain,pct:p.pg};
+}
+function quoteHTML(r,edgeTotal,cuts){
+  const q=quote(r,edgeTotal,cuts);
+  r.total=q.lines.length?q.total:null;
+  if(!q.lines.length)return "";
+  return `<section class="quote" aria-labelledby="quote-title"><h3 id="quote-title">Presupuesto</h3>
+    <table><thead class="sr-only"><tr><th scope="col">Concepto</th><th scope="col">Detalle</th><th scope="col" class="n">Importe</th></tr></thead><tbody>
+    ${q.lines.map(l=>`<tr><td>${l.label}</td><td class="d">${l.d}</td><td class="n">${money(l.v)}</td></tr>`).join("")}
+    ${q.pct>0?`<tr class="sub"><td>Subtotal</td><td></td><td class="n">${money(q.sub)}</td></tr><tr><td>Ganancia</td><td class="d">${q.pct}%</td><td class="n">${money(q.gain)}</td></tr>`:""}
+    <tr class="total"><td>Total</td><td></td><td class="n">${money(q.total)}</td></tr>
+    </tbody></table>
+    ${r.unplaced.length?`<div class="hint">No incluye las ${r.unplaced.length} pieza(s) sin colocar.</div>`:""}</section>`;
 }
 // Lados con canto tal como quedan en el tablero: al rotar la pieza 90°,
 // superior/inferior pasan a izquierda/derecha y viceversa.
@@ -474,7 +508,7 @@ $("importBtn").onclick=()=>{
   $("csv").value="";save();validate();
   toast(`Se importaron ${n} pieza${n===1?"":"s"}${skipped?` · ${skipped} línea${skipped===1?"":"s"} ignorada${skipped===1?"":"s"}`:""}.`,{type:skipped?"error":"info"});
 };
-["project","bw","bh","kerf","margin","maxb","grain","ct","cx"].forEach(id=>$(id).addEventListener("input",()=>{save();validate()}));
+["project","bw","bh","kerf","margin","maxb","grain","ct","cx",...PRICES].forEach(id=>$(id).addEventListener("input",()=>{save();validate()}));
 document.addEventListener("keydown",e=>{
   if((e.ctrlKey||e.metaKey)&&e.key==="Enter"){e.preventDefault();closeEdgePop(false);calculate()}
   else if(e.key==="Escape"&&!$("edgePop").hidden){e.preventDefault();closeEdgePop()}

@@ -139,3 +139,21 @@ button.edge line.on,.pop-piece line.on{stroke:var(--ink)}
 .pop-actions button.ok{background:var(--accent);color:var(--accent-ink);border-color:var(--accent)}
 .list td.edges{color:var(--muted)}
 @media print{.pop{display:none}}
+
+/* presupuesto */
+details.budget{margin-top:18px}
+details.budget summary{cursor:pointer;list-style:none;border-radius:6px}
+details.budget summary::-webkit-details-marker{display:none}
+details.budget summary h2{display:flex;align-items:center;gap:6px;margin:0 0 10px}
+details.budget summary h2::before{content:"▸";font-size:10px;transition:transform .15s}
+details.budget[open] summary h2::before{transform:rotate(90deg)}
+details.budget summary h2 small{font-weight:400;color:var(--muted);text-transform:none;letter-spacing:0}
+details.budget summary:focus-visible{outline:2px solid var(--focus);outline-offset:2px}
+.quote{background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:14px;margin-bottom:18px}
+.quote h3{margin:0 0 8px;font:600 14px ui-monospace,Menlo,monospace}
+.quote table{width:100%;border-collapse:collapse;font-size:13px}
+.quote td,.quote th{padding:6px;border-bottom:1px solid var(--line);text-align:left;font-weight:400}
+.quote td.n,.quote th.n{text-align:right;font-variant-numeric:tabular-nums;white-space:nowrap}
+.quote td.d{color:var(--muted);font-size:12px}
+.quote tr.sub td{font-weight:600}
+.quote tr.total td{font:700 18px ui-monospace,Menlo,monospace;border-bottom:none;padding-top:10px}

@@ -103,6 +103,20 @@
   <textarea id="csv" rows="4" aria-labelledby="csv-title" aria-describedby="csv-hint" placeholder="Lateral,600,2100,2&#10;Puerta,400,700,4&#10;Estante,560,300,3"></textarea>
   <button class="full" id="importBtn">Importar CSV</button>
 
+  <details class="budget" id="budget">
+    <summary><h2 id="budget-title">Presupuesto <small>(opcional)</small></h2></summary>
+    <fieldset class="box" aria-labelledby="budget-title">
+      <div class="grid g2">
+        <div><label for="pb">Precio por tablero ($)</label><input type="number" id="pb" min="0" step="any" inputmode="decimal" placeholder="0" aria-describedby="pb-err"><span class="err" id="pb-err"></span></div>
+        <div><label for="pe">Canto por metro ($)</label><input type="number" id="pe" min="0" step="any" inputmode="decimal" placeholder="0" aria-describedby="pe-err"><span class="err" id="pe-err"></span></div>
+        <div><label for="pc" title="Costo de cada corte de sierra">Precio por corte ($)</label><input type="number" id="pc" min="0" step="any" inputmode="decimal" placeholder="0" aria-describedby="pc-err"><span class="err" id="pc-err"></span></div>
+        <div><label for="po" title="Herrajes, mano de obra, flete, etc.">Otros costos ($)</label><input type="number" id="po" min="0" step="any" inputmode="decimal" placeholder="0" aria-describedby="po-err"><span class="err" id="po-err"></span></div>
+        <div><label for="pg">Ganancia (%)</label><input type="number" id="pg" min="0" step="any" inputmode="decimal" placeholder="0" aria-describedby="pg-err"><span class="err" id="pg-err"></span></div>
+      </div>
+      <div class="hint">Se cobra el tablero entero aunque el último no se use completo. Los cortes de recorte del margen no se cuentan.</div>
+    </fieldset>
+  </details>
+
   <button class="primary" id="calc">Calcular ▸</button>
   <div class="hint" style="text-align:center">Ctrl/⌘ + Enter para calcular</div>
 </aside>
