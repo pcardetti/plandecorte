@@ -8,6 +8,8 @@ const ICONS={
   ruler:'<path d="M21.3 15.3a2.4 2.4 0 0 1 0 3.4l-2.6 2.6a2.4 2.4 0 0 1-3.4 0L2.7 8.7a2.4 2.4 0 0 1 0-3.4l2.6-2.6a2.4 2.4 0 0 1 3.4 0Z"/><path d="m7.5 10.5 2-2M10.5 13.5l2-2M13.5 16.5l2-2"/>',
   edit:'<path d="M12 20h9"/><path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4Z"/>',
   plus:'<path d="M12 5v14M5 12h14"/>',
+  check:'<path d="M20 6 9 17l-5-5"/>',
+  spark:'<path d="M12 3v3M12 18v3M3 12h3M18 12h3M5.6 5.6l2.1 2.1M16.3 16.3l2.1 2.1M5.6 18.4l2.1-2.1M16.3 7.7l2.1-2.1"/>',
   alert:'<path d="m21.7 18-8-14a2 2 0 0 0-3.4 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.7-3Z"/><path d="M12 9v4M12 17h.01"/>',
   reset:'<path d="M3 12a9 9 0 1 0 9-9 9.8 9.8 0 0 0-6.7 2.7L3 8"/><path d="M3 3v5h5"/>',
   rotate:'<path d="M3 12a9 9 0 1 0 3-6.7L3 8"/><path d="M3 3v5h5"/>',
@@ -497,90 +499,73 @@ async function openShared(){
   }catch(e){toast("No se pudo abrir el link compartido: está incompleto o dañado.",{type:"error",timeout:7000})}
 }
 
-// ---------- algoritmo: FFD + guillotina ----------
-// Cada tablero mantiene una lista de rectángulos libres. Al colocar una pieza
-// en un rectángulo libre se divide en dos (derecha y abajo) dejando el kerf.
-function pack(pieces,cfg,sortFn,fitRule,splitRule){
-  const uw=cfg.W-2*cfg.margin, uh=cfg.H-2*cfg.margin;
-  const items=[];
-  for(const p of pieces)for(let k=0;k<p.q;k++)items.push({...p,n:k+1});
-  items.sort(sortFn);
-  const boards=[], unplaced=[];
-  const newBoard=()=>({free:[{x:0,y:0,w:uw,h:uh}],placed:[],cuts:0});
-  for(const it of items){
-    // un giro elegido a mano en el plano manda sobre la elección del optimizador
-    const forced=cfg.force?.[`${it.id}:${it.n}`];
-    const orients=forced==null?orientations(it.w,it.h,it.g,cfg.grain):[forced?[it.h,it.w,true]:[it.w,it.h,false]];
-    let best=null;
-    const tryBoard=(b,bi)=>{
-      b.free.forEach((f,fi)=>{
-        for(const [w,h,rot] of orients){
-          if(w<=f.w&&h<=f.h){
-            const score=fitRule(f,w,h);
-            if(!best||score<best.score)best={bi,fi,w,h,rot,score};
-          }
-        }
-      });
-    };
-    boards.forEach(tryBoard);
-    if(!best){
-      if(boards.length>=cfg.maxB||!orients.some(([w,h])=>w<=uw&&h<=uh)){unplaced.push(it);continue}
-      boards.push(newBoard());tryBoard(boards[boards.length-1],boards.length-1);
-    }
-    const b=boards[best.bi], f=b.free[best.fi];
-    b.placed.push({x:f.x,y:f.y,w:best.w,h:best.h,rot:best.rot,item:it});
-    // un corte por cada lado de la pieza que no coincide con el borde del espacio libre
-    b.cuts+=(f.w>best.w)+(f.h>best.h);
-    b.free.splice(best.fi,1);
-    const k=cfg.kerf, rw=f.w-best.w-k, rh=f.h-best.h-k;
-    // Dos formas de cortar con guillotina el sobrante en L
-    const horiz=splitRule(f,best.w,best.h);
-    let A,B;
-    if(horiz){ // corte horizontal completo primero
-      A={x:f.x+best.w+k,y:f.y,w:rw,h:best.h};
-      B={x:f.x,y:f.y+best.h+k,w:f.w,h:rh};
-    }else{     // corte vertical completo primero
-      A={x:f.x+best.w+k,y:f.y,w:rw,h:f.h};
-      B={x:f.x,y:f.y+best.h+k,w:best.w,h:rh};
-    }
-    for(const r of [A,B])if(r.w>0&&r.h>0)b.free.push(r);
+// ---------- optimizador ----------
+// El método rápido da un plan al instante; después un Web Worker (optimizer-worker.js)
+// sigue buscando sin trabar la pantalla y, si encuentra un plan mejor, se redibuja.
+const OPT_MS=1500, DEEP_MS=12000;
+let worker=null, job=null, jobSeq=0, opt={state:"idle"}, deepTimer=0;
+function stopWorker(){if(worker){worker.terminate();worker=null}clearInterval(deepTimer)}
+function startOptimize(pieces,cfg,ms,deep){
+  stopWorker();
+  try{worker=new Worker("optimizer-worker.js")}catch(e){worker=null}
+  job={id:++jobSeq,pieces,cfg,deep,t0:performance.now(),ms,from:lastResult?{boards:lastResult.boards.length,pct:usedPct(lastResult)}:null,better:false};
+  if(!worker){ // sin Worker: búsqueda corta en el hilo principal
+    const sol=CutOptimizer.solve(pieces,cfg,{timeLimit:deep?3000:400});
+    adopt(sol,job);finishOpt(job);return;
   }
-  return {boards,unplaced};
+  const my=job;
+  worker.onmessage=e=>{
+    const m=e.data;if(!job||m.id!==my.id)return;
+    if(m.type==="improve"||m.type==="done")adopt(m.sol,my);
+    if(m.type==="done"||m.type==="error")finishOpt(my,m.type==="error");
+  };
+  worker.onerror=()=>{if(job===my)finishOpt(my,true)};
+  worker.postMessage({id:my.id,pieces,cfg,timeLimit:ms});
+  opt={state:deep?"deep":"working",t0:my.t0,ms};
+  if(deep)deepTimer=setInterval(paintOptStatus,500);
+  paintOptStatus();
 }
-const SORTS={
-  area:(a,b)=>b.w*b.h-a.w*a.h,
-  maxSide:(a,b)=>Math.max(b.w,b.h)-Math.max(a.w,a.h)||b.w*b.h-a.w*a.h,
-  height:(a,b)=>b.h-a.h||b.w-a.w,
-  width:(a,b)=>b.w-a.w||b.h-a.h,
-  perim:(a,b)=>(b.w+b.h)-(a.w+a.h),
-};
-const FITS={
-  bssf:(f,w,h)=>Math.min(f.w-w,f.h-h)*1e6+Math.max(f.w-w,f.h-h),
-  blsf:(f,w,h)=>Math.max(f.w-w,f.h-h)*1e6+Math.min(f.w-w,f.h-h),
-  baf:(f,w,h)=>(f.w*f.h-w*h)*10+Math.min(f.w-w,f.h-h)/1e3,
-  bl:(f,w,h)=>f.y*1e6+f.x,
-};
-const SPLITS={
-  shorterLeftover:(f,w,h)=>(f.w-w)<(f.h-h),
-  longerLeftover:(f,w,h)=>(f.w-w)>=(f.h-h),
-  shorterAxis:(f,w,h)=>f.w<f.h,
-  longerAxis:(f,w,h)=>f.w>=f.h,
-};
-function evaluate(r){
-  // Menos sin colocar, menos tableros, y el último tablero lo más vacío posible
-  // (concentra el sobrante en un retal aprovechable).
-  const last=r.boards[r.boards.length-1];
-  const lastFill=last?last.placed.reduce((s,p)=>s+p.w*p.h,0):0;
-  return r.unplaced.length*1e15+r.boards.length*1e12+lastFill;
+function usedPct(r){
+  const used=r.boards.reduce((s,b)=>s+b.placed.reduce((a,p)=>a+p.w*p.h,0),0);
+  return r.boards.length?used/(r.boards.length*r.cfg.W*r.cfg.H)*100:0;
 }
-function optimize(pieces,cfg){
-  let best=null;
-  for(const s in SORTS)for(const f in FITS)for(const sp in SPLITS){
-    const r=pack(pieces,cfg,SORTS[s],FITS[f],SPLITS[sp]);
-    r.score=evaluate(r);r.algo=`${s}/${f}/${sp}`;
-    if(!best||r.score<best.score)best=r;
+// usar el plan del Worker si es mejor que el que se muestra
+function adopt(sol,my){
+  if(job!==my||!lastResult)return;
+  const cur=CutOptimizer.score(lastResult,my.cfg),nw=CutOptimizer.score(sol,my.cfg);
+  if(CutOptimizer.compare(nw,cur)>=0)return;
+  sol.cfg=my.cfg;sol.pieces=my.pieces;sol.ms=performance.now()-my.t0;
+  my.better=true;
+  lastResult=sol;render(sol);
+}
+function finishOpt(my,failed,stopped){
+  if(job!==my)return;
+  clearInterval(deepTimer);
+  if(worker){worker.terminate();worker=null}
+  job=null;
+  const r=lastResult;
+  opt={state:failed?"failed":"done",deep:my.deep,better:my.better,stopped};
+  if(r&&my.better&&my.from){
+    const nb=r.boards.length;
+    if(nb<my.from.boards)toast(`Encontré un plan mejor: ${nb} tablero${nb===1?"":"s"} (antes ${my.from.boards}), ${usedPct(r).toFixed(1)}% de aprovechamiento.`,{timeout:6000});
+    else if(my.deep)toast("La búsqueda a fondo mejoró el acomodo: el último tablero deja un retazo más grande.",{timeout:6000});
+  }else if(r&&my.deep&&!failed)toast(stopped?"Búsqueda detenida: queda el mejor plan encontrado hasta ahora.":"Búsqueda a fondo terminada: no hay un plan mejor que este.",{timeout:5000});
+  paintOptStatus();
+}
+function paintOptStatus(){
+  const el=$("optStatus");if(!el)return;
+  const deepBtn=$("deepBtn");
+  if(opt.state==="working"||opt.state==="deep"){
+    const left=Math.max(0,Math.ceil((opt.t0+opt.ms-performance.now())/1000));
+    el.innerHTML=`<span class="spin" aria-hidden="true"></span>${opt.state==="deep"?`Optimizando a fondo… ${left} s`:"Buscando un plan mejor…"}`+(opt.state==="deep"?` <button type="button" class="link" id="deepStop">Detener</button>`:"");
+    el.className="opt-status busy";
+    if($("deepStop"))$("deepStop").onclick=()=>{const my=job;stopWorker();if(my)finishOpt(my,false,true)};
+    if(deepBtn)deepBtn.disabled=true;
+  }else{
+    el.innerHTML=opt.state==="failed"?"No se pudo optimizar más: se muestra el plan rápido.":(opt.state==="done"?`${icon("check")}${opt.stopped?"Búsqueda detenida":opt.deep?"Búsqueda a fondo terminada":"Plan optimizado"}`:"");
+    el.className="opt-status";
+    if(deepBtn)deepBtn.disabled=false;
   }
-  return best;
 }
 
 // ---------- render ----------
@@ -611,9 +596,10 @@ function calculate(opts={}){
   }
   cfg.force=forced;
   const t0=performance.now();
-  const r=optimize(pieces,cfg);
+  const r=CutOptimizer.solve(pieces,cfg,{timeLimit:0}); // plan rápido, al instante
   r.ms=performance.now()-t0;r.cfg=cfg;r.pieces=pieces;
-  lastResult=r;render(r);save();
+  lastResult=r;opt={state:"idle"};render(r);save();
+  startOptimize(pieces,cfg,OPT_MS,false);
   const used=r.boards.reduce((s,b)=>s+b.placed.reduce((a,p)=>a+p.w*p.h,0),0);
   const pct=r.boards.length?used/(r.boards.length*cfg.W*cfg.H)*100:0;
   toast(`${opts.msg?opts.msg+" · ":""}Plan listo: ${r.boards.length} tablero${r.boards.length===1?"":"s"}, ${pct.toFixed(1)}% de aprovechamiento${r.total!=null?` · total ${money(r.total)}`:""}${r.unplaced.length?` · ${r.unplaced.length} sin colocar`:""}.`,{type:r.unplaced.length?"error":"info",timeout:4000});
@@ -683,6 +669,8 @@ function render(r){
     h+=`<div class="warn"><b>${r.unplaced.length} pieza(s) sin colocar:</b> ${esc(names)}. ${cfg.maxB<Infinity?"Se alcanzó el máximo de tableros o ":""}la pieza no cabe en el tablero.</div>`;
   }
   if(manualCount())h+=`<div class="manual" role="note">${icon("alert")}<div class="manual-txt"><strong>Plan modificado a mano</strong><span>${girosTxt(manualCount())}. Esas piezas tienen borde punteado amarillo y negro; el resto lo acomodó el optimizador.</span></div><button id="resetRot2">${icon("rotate")}Volver al plan automático</button></div>`;
+  const lb=CutOptimizer.lowerBound(r.pieces,cfg);
+  h+=`<div class="opt-bar"><div class="opt-status" id="optStatus" role="status" aria-live="polite"></div><button type="button" id="deepBtn" title="Busca durante unos ${DEEP_MS/1000} segundos un plan con menos tableros o mejor retazo">${icon("spark")}Optimizar a fondo</button></div>`;
   h+=`<div class="stats">
     <div class="stat"><b>${r.boards.length}</b><span>Tableros</span></div>
     <div class="stat"><b>${nPieces}</b><span>Piezas colocadas</span></div>
@@ -692,6 +680,7 @@ function render(r){
     ${edgeTotal>0?`<div class="stat"><b>${edgeTotal.toFixed(2)} m</b><span>Tapacanto</span></div>`:""}
     <div class="stat"><b>${cuts}</b><span>Cortes</span></div>
   </div>
+  ${!r.unplaced.length&&r.boards.length?`<div class="hint lb-hint">${r.boards.length<=lb?`${icon("check")}Usa la menor cantidad de tableros posible: el mínimo teórico para estas piezas es ${lb}.`:`Mínimo teórico: ${lb} tablero${lb===1?"":"s"}. No siempre se puede alcanzar: depende de cómo combinan las medidas.`}</div>`:""}
   ${quoteHTML(r,edgeTotal,cuts)}
   <div class="toolbar">
     <button class="edit" id="editBtn">${icon("edit")}Editar piezas</button>
@@ -711,8 +700,10 @@ function render(r){
       ${b.placed.map((p,j)=>`<tr><td>${j+1}</td><td><span class="sw" style="background:${p.item.color}"></span>${esc(p.item.name)}</td><td>${p.item.fw} × ${p.item.fh}</td>${anyCut?`<td>${p.item.w} × ${p.item.h}</td>`:""}${anyEdge?`<td class="edges">${edgeText(p.item.e)}</td>`:""}<td>${p.x+cfg.margin}, ${p.y+cfg.margin}</td><td>${p.rot?"↻ sí":"—"}${forced[`${p.item.id}:${p.item.n}`]!=null?" · a mano":""}</td></tr>`).join("")}
       </tbody></table></div></div>`;
   });
-  h+=`<div class="hint">Calculado en ${r.ms.toFixed(0)} ms · mejor estrategia: ${r.algo}</div>`;
+  h+=`<div class="hint">Calculado en ${(r.ms/1000).toFixed(1).replace(".",",")} s</div>`;
   $("out").innerHTML=h;
+  paintOptStatus();
+  $("deepBtn").onclick=()=>{if(lastResult)startOptimize(lastResult.pieces,lastResult.cfg,DEEP_MS,true)};
   $("print").onclick=()=>window.print();
   $("exportCsv").onclick=exportCSV;
   $("lbl").onclick=()=>{showLabels=!showLabels;render(r);$("lbl").focus()};
@@ -846,6 +837,8 @@ $("out").addEventListener("keydown",e=>{
   if(g&&(e.key==="Enter"||e.key===" ")){e.preventDefault();rotatePiece(g.dataset.key)}
 });
 function showEmpty(){
+  if(job){const my=job;job=null;stopWorker()}
+  opt={state:"idle"};
   $("out").innerHTML=EMPTY_HTML;
   $("emptyAdd").onclick=()=>{addAndFocus();$("pieces-title").scrollIntoView({behavior:"smooth"})};
 }

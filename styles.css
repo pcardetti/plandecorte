@@ -250,3 +250,16 @@ aside:has(#grain:not(:checked)) table.pieces select.g{opacity:.55}
   .pop.confirm{display:none!important}
   .badge-manual{background:#fff;color:#000;border-color:#000}
 }
+
+/* estado del optimizador */
+.opt-bar{display:flex;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap;margin-bottom:12px}
+.opt-status{display:inline-flex;align-items:center;gap:8px;font-size:13px;color:var(--muted);min-height:20px}
+.opt-status svg{width:16px;height:16px;color:#2e7d4f}
+.opt-status.busy{color:var(--ink)}
+.opt-status .link{background:none;border:none;padding:0 2px;color:var(--accent);text-decoration:underline;font-weight:600;cursor:pointer}
+.spin{width:14px;height:14px;border-radius:50%;border:2px solid var(--line);border-top-color:var(--accent);animation:spin .8s linear infinite}
+@keyframes spin{to{transform:rotate(360deg)}}
+#deepBtn:disabled{opacity:.5;cursor:default}
+.lb-hint{display:flex;align-items:center;gap:6px;margin:-8px 0 14px}
+.lb-hint svg{width:14px;height:14px;color:#2e7d4f;flex:none}
+@media print{.opt-bar{display:none}}
