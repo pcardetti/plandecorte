@@ -277,8 +277,12 @@ const newId=()=>Date.now().toString(36)+Math.random().toString(36).slice(2,7);
 function state(){
   return {project:$("project").value,
     cfg:{...Object.fromEntries(CFG_KEYS.map(k=>[k,$(k).value])),grain:$("grain").checked},
-    rows:[...$("rows").children].map(rowData)};
+    rows:[...$("rows").children].map(rowData),
+    // giros a mano junto con la huella de las piezas para las que se hicieron
+    manual:manualCount()?{sig:forcedSig,force:{...forced}}:null};
 }
+const manualCount=()=>Object.keys(forced).length;
+const girosTxt=n=>`${n} giro${n===1?"":"s"} hecho${n===1?"":"s"} a mano`;
 // Limpia datos que vienen del almacenamiento o de un link compartido
 function sanitize(s){
   if(!s||typeof s!=="object")s={};
@@ -288,8 +292,14 @@ function sanitize(s){
     project:str(s.project,120),
     cfg:{...Object.fromEntries(CFG_KEYS.map(k=>[k,cfg[k]==null?DEFAULTS[k]:str(cfg[k],16)])),grain:!!cfg.grain},
     rows:(Array.isArray(s.rows)?s.rows:[]).slice(0,500).filter(r=>r&&typeof r==="object")
-      .map(r=>({name:str(r.name,80),w:str(r.w,12),h:str(r.h,12),q:str(r.q??1,6),g:normGrain(r.g),e:normEdges(r.e)}))
+      .map(r=>({name:str(r.name,80),w:str(r.w,12),h:str(r.h,12),q:str(r.q??1,6),g:normGrain(r.g),e:normEdges(r.e)})),
+    manual:sanitizeManual(s.manual)
   };
+}
+function sanitizeManual(m){
+  if(!m||typeof m!=="object"||!/^[0-9a-f]{1,16}$/.test(m.sig)||!m.force||typeof m.force!=="object")return null;
+  const force=Object.fromEntries(Object.entries(m.force).filter(([k,v])=>/^\d{1,4}:\d{1,5}$/.test(k)&&typeof v==="boolean").slice(0,2000));
+  return Object.keys(force).length?{sig:m.sig,force}:null;
 }
 function applyState(s){
   s=sanitize(s);
@@ -300,7 +310,12 @@ function applyState(s){
   $("budget").open=PRICES.some(k=>+s.cfg[k]>0);
   $("rows").innerHTML="";
   s.rows.forEach(r=>addRow(r));
+  forced=s.manual?{...s.manual.force}:{};forcedSig=s.manual?s.manual.sig:"";
   attempted=false;lastResult=null;showEmpty();validate();
+}
+// aviso al abrir un proyecto que trae giros a mano
+function noteManual(){
+  if(manualCount())toast(`Este proyecto tiene ${girosTxt(manualCount())}: se aplica${manualCount()===1?"":"n"} al calcular.`,{timeout:6000});
 }
 function persist(){
   try{localStorage.setItem(PSTORE,JSON.stringify(db))}
@@ -329,7 +344,7 @@ function load(){
     createProject(old||state());
   }
   if(!db.items[db.current])db.current=db.order[0];
-  applyState(db.items[db.current].data);renderProjSel();
+  applyState(db.items[db.current].data);renderProjSel();noteManual();
 }
 function renderProjSel(){
   const sel=$("projSel");
@@ -339,12 +354,12 @@ function renderProjSel(){
 function switchProject(id){
   if(id===db.current||!db.items[id])return;
   save();db.current=id;persist();
-  applyState(db.items[id].data);renderProjSel();
+  applyState(db.items[id].data);renderProjSel();noteManual();
 }
 function newProject(){
   save();
   // el proyecto nuevo conserva tablero, canto y precios; empieza sin piezas
-  createProject({...state(),project:"",rows:[]});
+  createProject({...state(),project:"",rows:[],manual:null});
   applyState(db.items[db.current].data);renderProjSel();
   $("project").focus();
   toast("Proyecto nuevo: conserva el tablero, el canto y los precios.");
@@ -360,7 +375,7 @@ function deleteProject(){
   const id=db.current, item=db.items[id], idx=db.order.indexOf(id);
   save();
   delete db.items[id];db.order.splice(idx,1);
-  if(!db.order.length)createProject({...state(),project:"",rows:[]});
+  if(!db.order.length)createProject({...state(),project:"",rows:[],manual:null});
   else db.current=db.order[Math.min(idx,db.order.length-1)];
   persist();applyState(db.items[db.current].data);renderProjSel();
   $("projSel").focus();
@@ -413,6 +428,8 @@ function openShare(){
   const pop=$("sharePop");pop.hidden=false;
   $("shareBtn").setAttribute("aria-expanded","true");
   $("shareNative").hidden=!navigator.share;
+  $("shareManual").hidden=!manualCount();
+  $("shareManual").textContent=`Ojo: este link incluye ${girosTxt(manualCount())}. Quien lo abra verá el aviso de plan modificado.`;
   placePop(pop,$("shareBtn"));
   refreshShare();
   $("shareCopy").focus({preventScroll:true});
@@ -453,7 +470,7 @@ async function openShared(){
       if(blank){delete db.items[old];db.order=db.order.filter(id=>id!==old);persist()}
     }
     applyState(db.items[db.current].data);renderProjSel();
-    toast(dup?`«${data.project||"Plan compartido"}» ya estaba en tus proyectos.`:`Abriste «${data.project||"un plan compartido"}». Quedó guardado en tus proyectos.`,{timeout:7000});
+    toast(dup?`«${data.project||"Plan compartido"}» ya estaba en tus proyectos.`:`Abriste «${data.project||"un plan compartido"}». Quedó guardado en tus proyectos.${data.manual?` Trae ${girosTxt(Object.keys(data.manual.force).length)}.`:""}`,{timeout:7000});
     if(readPieces().length)calculate();
   }catch(e){toast("No se pudo abrir el link compartido: está incompleto o dañado.",{type:"error",timeout:7000})}
 }
@@ -549,6 +566,8 @@ let lastResult=null;
 // Giros elegidos a mano en el plano: {"fila:copia": true=rotada/false=normal}.
 // Se descartan solos cuando cambian las piezas o el tablero.
 let forced={}, forcedSig="";
+// huella corta (FNV-1a) de las piezas y el tablero para saber si los giros siguen valiendo
+function hashSig(str){let h=0x811c9dc5;for(let i=0;i<str.length;i++){h^=str.charCodeAt(i);h=Math.imul(h,0x01000193)}return (h>>>0).toString(16)}
 function calculate(opts={}){
   attempted=true;
   const errs=validate();
@@ -562,8 +581,12 @@ function calculate(opts={}){
     if(!$("rows").children.length)addRow();
     $("rows").lastElementChild.querySelector(".n").focus();return;
   }
-  const sig=JSON.stringify([pieces.map(({color,...p})=>p),{...cfg,price:null}]);
-  if(sig!==forcedSig){forced={};forcedSig=sig}
+  const sig=hashSig(JSON.stringify([pieces.map(({color,...p})=>p),{...cfg,price:null}]));
+  if(sig!==forcedSig){
+    const n=manualCount();
+    forced={};forcedSig=sig;
+    if(n)toast(`Se descart${n===1?"ó":"aron"} ${girosTxt(n)} porque cambiaron las piezas o el tablero. El plan volvió a ser automático.`,{type:"error",timeout:8000});
+  }
   cfg.force=forced;
   const t0=performance.now();
   const r=optimize(pieces,cfg);
@@ -606,6 +629,7 @@ function render(r){
     const names=[...new Set(r.unplaced.map(u=>`${u.name} (${u.w}×${u.h})`))].join(", ");
     h+=`<div class="warn"><b>${r.unplaced.length} pieza(s) sin colocar:</b> ${esc(names)}. ${cfg.maxB<Infinity?"Se alcanzó el máximo de tableros o ":""}la pieza no cabe en el tablero.</div>`;
   }
+  if(manualCount())h+=`<div class="manual" role="note"><span><b>Plan modificado a mano:</b> ${girosTxt(manualCount())}. Esas piezas tienen borde punteado; el resto lo acomodó el optimizador.</span><button id="resetRot2">${icon("rotate")}Volver al plan automático</button></div>`;
   h+=`<div class="stats">
     <div class="stat"><b>${r.boards.length}</b><span>Tableros</span></div>
     <div class="stat"><b>${nPieces}</b><span>Piezas colocadas</span></div>
@@ -630,7 +654,7 @@ function render(r){
     h+=`<div class="sheet"><h3>Tablero ${i+1} <small>${cfg.W} × ${cfg.H} mm · ${b.placed.length} piezas · ${(u/boardArea*100).toFixed(1)}% aprovechado</small></h3>
       ${boardSVG(b,cfg,i)}
       <div class="tablewrap"><table class="list"><caption class="sr-only">Piezas del tablero ${i+1}</caption><thead><tr><th scope="col">#</th><th scope="col">Pieza</th><th scope="col">${anyCut?"Final":"Medida"}</th>${anyCut?'<th scope="col">Corte</th>':""}${anyEdge?'<th scope="col">Canto</th>':""}<th scope="col">Posición (x,y)</th><th scope="col">Rotada</th></tr></thead><tbody>
-      ${b.placed.map((p,j)=>`<tr><td>${j+1}</td><td><span class="sw" style="background:${p.item.color}"></span>${esc(p.item.name)}</td><td>${p.item.fw} × ${p.item.fh}</td>${anyCut?`<td>${p.item.w} × ${p.item.h}</td>`:""}${anyEdge?`<td class="edges">${edgeText(p.item.e)}</td>`:""}<td>${p.x+cfg.margin}, ${p.y+cfg.margin}</td><td>${p.rot?"↻ sí":"—"}</td></tr>`).join("")}
+      ${b.placed.map((p,j)=>`<tr><td>${j+1}</td><td><span class="sw" style="background:${p.item.color}"></span>${esc(p.item.name)}</td><td>${p.item.fw} × ${p.item.fh}</td>${anyCut?`<td>${p.item.w} × ${p.item.h}</td>`:""}${anyEdge?`<td class="edges">${edgeText(p.item.e)}</td>`:""}<td>${p.x+cfg.margin}, ${p.y+cfg.margin}</td><td>${p.rot?"↻ sí":"—"}${forced[`${p.item.id}:${p.item.n}`]!=null?" · a mano":""}</td></tr>`).join("")}
       </tbody></table></div></div>`;
   });
   h+=`<div class="hint">Calculado en ${r.ms.toFixed(0)} ms · mejor estrategia: ${r.algo}</div>`;
@@ -638,7 +662,9 @@ function render(r){
   $("print").onclick=()=>window.print();
   $("exportCsv").onclick=exportCSV;
   $("lbl").onclick=()=>{showLabels=!showLabels;render(r);$("lbl").focus()};
-  if($("resetRot"))$("resetRot").onclick=()=>{forced={};calculate({noScroll:true,msg:"Giros deshechos"});$("lbl").focus()};
+  const reset=()=>{forced={};calculate({noScroll:true,msg:"Plan automático de nuevo"});$("lbl").focus()};
+  if($("resetRot"))$("resetRot").onclick=reset;
+  if($("resetRot2"))$("resetRot2").onclick=reset;
   $("editBtn").onclick=()=>{$("pieces-title").scrollIntoView({behavior:"smooth"});($("rows").querySelector(".n")||$("add")).focus({preventScroll:true})};
 }
 let showLabels=true;
@@ -665,6 +691,7 @@ function boardSVG(b,cfg,i){
     // la veta del tablero (horizontal) también se ve sobre cada pieza
     if(cfg.grain)for(let gy=y+fs*0.9;gy<y+p.h-fs*0.3;gy+=fs*0.9)s+=`<line x1="${x+fs*0.2}" x2="${x+p.w-fs*0.2}" y1="${gy}" y2="${gy}" stroke="#1d1b18" stroke-opacity=".14" stroke-width="${fs/7}" pointer-events="none"/>`;
     s+=edgeLines(p,x,y,fs);
+    if(forced[key]!=null)s+=`<rect x="${x+fs*0.25}" y="${y+fs*0.25}" width="${Math.max(0,p.w-fs*0.5)}" height="${Math.max(0,p.h-fs*0.5)}" fill="none" stroke="#1d1b18" stroke-width="${fs/5}" stroke-dasharray="${fs*0.7} ${fs*0.45}" pointer-events="none"/>`;
     if(showLabels){
       const f=Math.min(fs,p.w/7,p.h/3);
       if(f>fs*0.35){
@@ -723,10 +750,10 @@ function csvCell(v){
 function exportCSV(){
   if(!lastResult)return;
   const m=lastResult.cfg.margin;
-  let csv="tablero,pieza,ancho_corte,alto_corte,ancho_final,alto_final,canto,canto_m,x,y,rotada\n";
+  let csv="tablero,pieza,ancho_corte,alto_corte,ancho_final,alto_final,canto,canto_m,x,y,rotada,giro_manual\n";
   lastResult.boards.forEach((b,i)=>b.placed.forEach(p=>{
     const it=p.item, sides=edgeList(normEdges(it.e)).map(s=>s.k).join("");
-    csv+=`${i+1},${csvCell(it.name)},${it.w},${it.h},${it.fw},${it.fh},${sides||"-"},${it.em.toFixed(3)},${p.x+m},${p.y+m},${p.rot?"si":"no"}\n`;
+    csv+=`${i+1},${csvCell(it.name)},${it.w},${it.h},${it.fw},${it.fh},${sides||"-"},${it.em.toFixed(3)},${p.x+m},${p.y+m},${p.rot?"si":"no"},${lastResult.cfg.force?.[`${it.id}:${it.n}`]!=null?"si":"no"}\n`;
   }));
   const a=document.createElement("a");
   a.href=URL.createObjectURL(new Blob([csv],{type:"text/csv"}));
