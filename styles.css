@@ -190,3 +190,14 @@ aside:has(#grain:not(:checked)) table.pieces select.g{opacity:.55}
 .manual button{background:transparent;color:inherit;border-color:currentColor}
 .manual-note{color:var(--note-ink);background:var(--note-bg);border:1px solid var(--note-line);border-radius:6px;padding:6px 8px;margin-top:8px}
 @media print{.manual{border:1px solid #000;color:#000;background:#fff}.manual button{display:none}}
+
+/* aviso junto a la pieza */
+.tip{position:fixed;z-index:40;max-width:min(320px,calc(100vw - 16px));background:var(--danger-bg);color:var(--danger-ink);border:1px solid var(--danger-line);border-radius:8px;padding:9px 11px;font-size:13px;line-height:1.35;box-shadow:var(--shadow);animation:tip-in .15s ease-out;pointer-events:none}
+.tip.info{background:var(--toast-bg);color:var(--toast-ink);border-color:transparent}
+.tip::after{content:"";position:absolute;left:var(--arrow,50%);bottom:-6px;width:10px;height:10px;margin-left:-5px;background:inherit;border:inherit;border-top:none;border-left:none;transform:rotate(45deg)}
+.tip.below::after{bottom:auto;top:-6px;transform:rotate(-135deg)}
+@keyframes tip-in{from{opacity:0;transform:translateY(4px)}to{opacity:1;transform:none}}
+.piece.nope{animation:nope .4s ease-in-out;transform-box:fill-box;transform-origin:center}
+.piece.nope .body{stroke:var(--danger-ink);stroke-opacity:1;stroke-width:3px;vector-effect:non-scaling-stroke}
+@keyframes nope{20%{transform:translateX(-2%)}40%{transform:translateX(2%)}60%{transform:translateX(-1.5%)}80%{transform:translateX(1%)}}
+@media print{.tip,.rot-ico{display:none}}

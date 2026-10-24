@@ -599,17 +599,47 @@ function calculate(opts={}){
   // (el foco va primero y el scroll en el frame siguiente; si no, Chrome cancela el scroll suave)
   if(isMobile()&&!opts.noScroll){$("out").focus({preventScroll:true});requestAnimationFrame(()=>$("out").scrollIntoView({behavior:"smooth",block:"start"}))}
 }
+// Aviso flotante junto a la pieza tocada (los avisos de abajo pasaban desapercibidos)
+let tipTimer=0, tipKey=null;
+function pieceTip(key,msg,type="error"){
+  const g=$("out").querySelector(`.piece[data-key="${key}"]`), tip=$("pieceTip");
+  if(!g)return toast(msg,{type});
+  tipKey=key;
+  tip.className=`tip ${type}`;tip.textContent=msg;tip.hidden=false;
+  placeTip();
+  g.classList.remove("nope");void g.getBBox();g.classList.add("nope");
+  clearTimeout(tipTimer);tipTimer=setTimeout(hideTip,6000);
+}
+function placeTip(){
+  const tip=$("pieceTip");
+  if(tip.hidden||!tipKey)return;
+  const g=$("out").querySelector(`.piece[data-key="${tipKey}"]`);
+  if(!g)return hideTip();
+  const r=g.getBoundingClientRect(), tw=tip.offsetWidth, th=tip.offsetHeight;
+  const left=Math.min(Math.max(8,r.left+r.width/2-tw/2),innerWidth-tw-8);
+  const above=r.top-th-10>=8;
+  tip.style.left=left+"px";tip.style.top=(above?r.top-th-10:Math.min(r.bottom+10,innerHeight-th-8))+"px";
+  tip.classList.toggle("below",!above);
+  tip.style.setProperty("--arrow",`${Math.min(Math.max(14,r.left+r.width/2-left),tw-14)}px`);
+}
+function hideTip(){
+  $("pieceTip").hidden=true;
+  const g=tipKey&&$("out").querySelector(`.piece[data-key="${tipKey}"]`);
+  if(g)g.classList.remove("nope");
+  tipKey=null;
+}
 function rotatePiece(key){
+  hideTip();
   const r=lastResult;if(!r)return;
   let p=null;
   for(const b of r.boards)for(const q of b.placed)if(`${q.item.id}:${q.item.n}`===key)p=q;
   if(!p)return;
   const it=p.item, cfg=r.cfg, uw=cfg.W-2*cfg.margin, uh=cfg.H-2*cfg.margin;
-  if(cfg.grain&&it.g){toast(`«${it.name}» tiene la veta ${GRAIN_TXT[it.g]}: no se puede girar sin cruzarla. Cambiá la veta a «—» para girarla.`,{type:"error",timeout:7000});return}
-  if(it.w===it.h){toast(`«${it.name}» es cuadrada: girarla no cambia nada.`);return}
+  if(cfg.grain&&it.g){pieceTip(key,`«${it.name}» tiene la veta ${GRAIN_TXT[it.g]}: no se puede girar sin cruzarla. Cambiá la veta a «—» para girarla.`);return}
+  if(it.w===it.h){pieceTip(key,`«${it.name}» es cuadrada: girarla no cambia nada.`,"info");return}
   const [w,h]=p.rot?[it.w,it.h]:[it.h,it.w];
   // p.rot = cómo está ahora; el aviso habla de la posición a la que se quiere pasar
-  if(w>uw||h>uh){toast(`«${it.name}» (${it.w}×${it.h}) no entra ${p.rot?"sin girar":"girada"} en el tablero: necesita ${w}×${h} y el espacio útil es ${uw}×${uh}.`,{type:"error",timeout:7000});return}
+  if(w>uw||h>uh){pieceTip(key,`«${it.name}» (${it.w}×${it.h}) no entra ${p.rot?"sin girar":"girada"} en el tablero: necesita ${w}×${h} y el espacio útil es ${uw}×${uh}.`);return}
   forced[key]=!p.rot;
   calculate({noScroll:true,msg:`«${it.name}» girada`});
   // mantener el foco en la misma pieza para seguir usando el teclado
@@ -671,6 +701,8 @@ function render(r){
 let showLabels=true;
 function boardSVG(b,cfg,i){
   const pad=Math.max(cfg.W,cfg.H)*0.035, fs=Math.max(cfg.W,cfg.H)*0.018, hatch=`hatch-${i}`;
+  // mm por píxel en pantalla, para que el ícono de giro mida ~22 px sea cual sea el tablero
+  const mmPerPx=(cfg.W+pad*2)/Math.max(200,$("out").clientWidth-60);
   let s=`<svg viewBox="${-pad} ${-pad} ${cfg.W+pad*2} ${cfg.H+pad*2}" xmlns="http://www.w3.org/2000/svg" font-family="ui-monospace,Menlo,monospace" role="group" aria-label="Tablero ${i+1}: ${b.placed.length} piezas">
     <defs><pattern id="${hatch}" width="${fs}" height="${fs}" patternUnits="userSpaceOnUse" patternTransform="rotate(45)">
       <line x1="0" y1="0" x2="0" y2="${fs}" stroke="var(--board-edge)" stroke-opacity=".25" stroke-width="${fs/4}"/></pattern></defs>
@@ -685,7 +717,7 @@ function boardSVG(b,cfg,i){
   for(const p of b.placed){
     const x=p.x+cfg.margin,y=p.y+cfg.margin;
     const it=p.item, key=`${it.id}:${it.n}`, locked=cfg.grain&&it.g;
-    const desc=`${it.name} ${p.w}×${p.h}${p.rot?", rotada":""}${forced[key]!=null?", girada a mano":""}${locked?`, veta ${GRAIN_TXT[it.g]}`:""}`;
+    const desc=`${it.name} ${it.w}×${it.h}${p.rot?", rotada":""}${forced[key]!=null?", girada a mano":""}${locked?`, veta ${GRAIN_TXT[it.g]}`:""}`;
     s+=`<g class="piece${locked?" locked":""}" data-key="${key}" role="button" tabindex="0" aria-label="${esc(desc)}. ${locked?"No se puede girar por la veta":"Girar 90°"}">
       <title>${esc(desc)}${locked?"":" · clic para girar"}</title>
       <rect class="body" x="${x}" y="${y}" width="${p.w}" height="${p.h}" fill="${it.color}" fill-opacity=".85" stroke="#1d1b18" stroke-opacity=".6" stroke-width="${fs/8}"/>`;
@@ -694,11 +726,21 @@ function boardSVG(b,cfg,i){
     s+=edgeLines(p,x,y,fs);
     if(forced[key]!=null)s+=`<rect x="${x+fs*0.25}" y="${y+fs*0.25}" width="${Math.max(0,p.w-fs*0.5)}" height="${Math.max(0,p.h-fs*0.5)}" fill="none" stroke="#1d1b18" stroke-width="${fs/5}" stroke-dasharray="${fs*0.7} ${fs*0.45}" pointer-events="none"/>`;
     if(showLabels){
-      const f=Math.min(fs,p.w/7,p.h/3);
-      if(f>fs*0.35){
-        s+=`<text x="${x+p.w/2}" y="${y+p.h/2-f*0.2}" text-anchor="middle" font-size="${f}" font-weight="700" fill="#1d1b18">${esc(p.item.name)}</text>
-            <text x="${x+p.w/2}" y="${y+p.h/2+f*1.0}" text-anchor="middle" font-size="${f*0.85}" fill="#1d1b18">${p.w}×${p.h}</text>`;
+      // la etiqueta va a lo largo del lado más largo, así no desaparece en piezas
+      // angostas, y siempre muestra la medida de la pieza (ancho×alto), esté o no girada
+      const vertical=p.h>p.w*1.15, len=vertical?p.h:p.w, thick=vertical?p.w:p.h;
+      const chars=Math.max(it.name.length,`${it.w}×${it.h}`.length,6);
+      const f=Math.min(fs,len*0.85/(chars*0.62),thick/3);
+      if(f>fs*0.3){
+        const cx=x+p.w/2, cy=y+p.h/2, tr=vertical?` transform="rotate(-90 ${cx} ${cy})"`:"";
+        s+=`<g pointer-events="none"${tr}><text x="${cx}" y="${cy-f*0.2}" text-anchor="middle" font-size="${f}" font-weight="700" fill="#1d1b18">${esc(it.name)}</text>
+            <text x="${cx}" y="${cy+f*1.0}" text-anchor="middle" font-size="${f*0.85}" fill="#1d1b18">${it.w}×${it.h}</text></g>`;
       }
+    }
+    // ícono de giro en la esquina de las piezas que se pueden girar
+    if(!locked&&it.w!==it.h){
+      const sz=Math.min(22*mmPerPx,p.w*0.45,p.h*0.45), ip=Math.min(5*mmPerPx,sz*0.25);
+      if(sz>=12*mmPerPx)s+=`<svg class="rot-ico" x="${x+p.w-sz-ip}" y="${y+ip}" width="${sz}" height="${sz}" viewBox="0 0 24 24" pointer-events="none" aria-hidden="true"><circle cx="12" cy="12" r="12" fill="#fff" fill-opacity=".85"/><path d="M18.5 12a6.5 6.5 0 1 1-1.9-4.6" fill="none" stroke="#1d1b18" stroke-width="2.4" stroke-linecap="round"/><path d="M17.6 3.8v4.3h-4.3" fill="none" stroke="#1d1b18" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/></svg>`;
     }
     s+=`</g>`;
   }
@@ -808,6 +850,7 @@ document.addEventListener("keydown",e=>{
   if((e.ctrlKey||e.metaKey)&&e.key==="Enter"){e.preventDefault();closeEdgePop(false);calculate()}
   else if(e.key==="Escape"&&!$("edgePop").hidden){e.preventDefault();closeEdgePop()}
   else if(e.key==="Escape"&&!$("sharePop").hidden){e.preventDefault();closeShare()}
+  else if(e.key==="Escape"&&!$("pieceTip").hidden){e.preventDefault();hideTip()}
 });
 $("edgePop").addEventListener("change",()=>{syncPopGlyph();applyPop()});
 $("edgeAll").onclick=()=>{$("edgePop").querySelectorAll("input").forEach(c=>c.checked=true);syncPopGlyph();applyPop()};
@@ -821,6 +864,9 @@ document.addEventListener("pointerdown",e=>{
 $("edgePop").addEventListener("focusout",e=>{if(popBtn&&e.relatedTarget&&!$("edgePop").contains(e.relatedTarget)&&e.relatedTarget!==popBtn)closeEdgePop(false)});
 // seguir al botón al hacer scroll o cuando el celular cambia el alto de la pantalla
 addEventListener("resize",positionPop);
+addEventListener("resize",placeTip);
+addEventListener("scroll",placeTip,{passive:true,capture:true});
+document.addEventListener("pointerdown",e=>{if(!$("pieceTip").hidden&&!e.target.closest(".piece"))hideTip()});
 addEventListener("scroll",positionPop,{passive:true,capture:true});
 load();
 openShared();
