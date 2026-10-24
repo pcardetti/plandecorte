@@ -157,3 +157,54 @@ function improve(sol,prep,cfg,deadline,seed){
   boards.sort((a,b)=>b.area-a.area);
   return {boards:boards.map(b=>({placed:b.placed})),unplaced:sol.unplaced.slice(),tries,gains};
 }
+
+// ---------- recombinación de tableros (experimental) ----------
+// Junta los tableros de todos los planes encontrados, elige primero los más llenos
+// sin repetir piezas y acomoda lo que sobra con la búsqueda en haz.
+function patternOf(steps,binIdx){return steps.filter(st=>st.bin===binIdx)}
+function recombine(P,pool,deadline,seed){
+  const nT=P.T.length,demand=P.T.map(t=>t.count);
+  const pats=[...pool.values()].sort((a,b)=>b.area-a.area);
+  let r=seed>>>0||7;const rnd=()=>{r^=r<<13;r^=r>>>17;r^=r<<5;return (r>>>0)/4294967296};
+  let best=null;
+  for(let it=0;now()<deadline;it++){
+    const rem=demand.slice(),chosen=[];
+    // orden por llenado con algo de azar en las vueltas siguientes
+    const order=it===0?pats:pats.map(p=>({p,k:p.area*(1-0.15*rnd())})).sort((a,b)=>b.k-a.k).map(x=>x.p);
+    for(const pt of order){
+      let fits=true;for(const [t,c] of pt.counts)if(rem[t]<c){fits=false;break}
+      if(!fits)continue;
+      for(const [t,c] of pt.counts)rem[t]-=c;
+      chosen.push(pt);
+    }
+    const left=rem.reduce((a,b)=>a+b,0);
+    let restSteps=[],restBins=0;
+    if(left){
+      const tis=[];for(let t=0;t<nT;t++)if(rem[t])tis.push(t);
+      const Ps={BW:P.BW,BH:P.BH,k:P.k,T:tis.map(t=>({count:rem[t],area:P.T[t].area,ors:P.T[t].ors}))};
+      const node=beam(Ps,left>60?16:64,deadline,{guide:4,lbTerm:false});
+      if(!node||node.pruned)break;
+      restBins=node.bins;restSteps=node.steps.map(st=>({...st,t:tis[st.t]}));
+    }
+    const total=chosen.length+restBins;
+    if(!best||total<best.bins){
+      const steps=[];chosen.forEach((pt,bi)=>{for(const st of pt.steps)steps.push({...st,bin:bi})});
+      for(const st of restSteps)steps.push({...st,bin:st.bin+chosen.length});
+      best={bins:total,steps};
+    }
+    if(it>200)break;
+  }
+  return best;
+}
+function addToPool(pool,node,P){
+  const byBin=new Map();
+  for(const st of node.steps){if(!byBin.has(st.bin))byBin.set(st.bin,[]);byBin.get(st.bin).push(st)}
+  for(const steps of byBin.values()){
+    const cnt=new Map();let area=0;
+    for(const st of steps){cnt.set(st.t,(cnt.get(st.t)||0)+1);area+=P.T[st.t].area}
+    const key=[...cnt].sort((a,b)=>a[0]-b[0]).map(x=>x.join(":")).join(",");
+    const prev=pool.get(key);
+    if(!prev)pool.set(key,{counts:[...cnt],area,steps:steps.map(st=>({t:st.t,o:st.o,x:st.x,y:st.y,fr:st.fr}))});
+  }
+}
+

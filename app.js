@@ -516,7 +516,10 @@ function startOptimize(pieces,cfg,ms,deep){
   const my=job;
   worker.onmessage=e=>{
     const m=e.data;if(!job||m.id!==my.id)return;
-    if(m.type==="improve"||m.type==="done")adopt(m.sol,my);
+    // en la búsqueda normal se redibuja una sola vez al final; en la búsqueda a fondo
+    // se muestran los avances, como mucho cada 0,7 s
+    if(m.type==="improve"){my.pending=m.sol;if(my.deep&&performance.now()-(my.lastPaint||0)>700){my.lastPaint=performance.now();adopt(m.sol,my)}}
+    if(m.type==="done")adopt(m.sol,my);
     if(m.type==="done"||m.type==="error")finishOpt(my,m.type==="error");
   };
   worker.onerror=()=>{if(job===my)finishOpt(my,true)};
@@ -536,7 +539,9 @@ function adopt(sol,my){
   if(CutOptimizer.compare(nw,cur)>=0)return;
   sol.cfg=my.cfg;sol.pieces=my.pieces;sol.ms=performance.now()-my.t0;
   my.better=true;
+  const fk=document.activeElement&&document.activeElement.closest&&document.activeElement.closest(".piece")?document.activeElement.dataset.key:null;
   lastResult=sol;render(sol);
+  if(fk){const g=$("out").querySelector(`.piece[data-key="${fk}"]`);if(g)g.focus({preventScroll:true})}
 }
 function finishOpt(my,failed,stopped){
   if(job!==my)return;
@@ -559,7 +564,7 @@ function paintOptStatus(){
     const left=Math.max(0,Math.ceil((opt.t0+opt.ms-performance.now())/1000));
     el.innerHTML=`<span class="spin" aria-hidden="true"></span>${opt.state==="deep"?`Optimizando a fondo… ${left} s`:"Buscando un plan mejor…"}`+(opt.state==="deep"?` <button type="button" class="link" id="deepStop">Detener</button>`:"");
     el.className="opt-status busy";
-    if($("deepStop"))$("deepStop").onclick=()=>{const my=job;stopWorker();if(my)finishOpt(my,false,true)};
+    if($("deepStop"))$("deepStop").onclick=()=>{const my=job;stopWorker();if(my){if(my.pending)adopt(my.pending,my);finishOpt(my,false,true)}};
     if(deepBtn)deepBtn.disabled=true;
   }else{
     el.innerHTML=opt.state==="failed"?"No se pudo optimizar más: se muestra el plan rápido.":(opt.state==="done"?`${icon("check")}${opt.stopped?"Búsqueda detenida":opt.deep?"Búsqueda a fondo terminada":"Plan optimizado"}`:"");

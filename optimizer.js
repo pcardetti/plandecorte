@@ -310,11 +310,17 @@ function score(sol,cfg){
   const uw=cfg.W-2*cfg.margin, uh=cfg.H-2*cfg.margin;
   const n=sol.boards.length, last=n?sol.boards[n-1].placed:[];
   const f=n?largestFree(last,uw,uh):{w:0,h:0};
-  return {unplaced:sol.unplaced.length,boards:n,leftover:f.w*f.h/(uw*uh)};
+  let cuts=0;
+  for(const b of sol.boards)cuts+=b.cuts!=null?b.cuts:countCuts(b.placed,0,0,uw,uh,cfg.kerf);
+  return {unplaced:sol.unplaced.length,boards:n,leftover:f.w*f.h/(uw*uh),cuts};
 }
-function compare(a,b){ // <0 si a es mejor
+// <0 si a es mejor: menos piezas sin colocar, menos tableros, un retazo claramente
+// más grande (más de 3% del tablero), menos cortes de sierra y por último el retazo.
+function compare(a,b){
   if(a.unplaced!==b.unplaced)return a.unplaced-b.unplaced;
   if(a.boards!==b.boards)return a.boards-b.boards;
+  if(Math.abs(a.leftover-b.leftover)>0.03)return b.leftover-a.leftover;
+  if(a.cuts!==b.cuts)return a.cuts-b.cuts;
   if(Math.abs(a.leftover-b.leftover)>1e-4)return b.leftover-a.leftover;
   return 0;
 }
@@ -374,11 +380,12 @@ function solve(pieces,cfg,opts={}){
     // tablero puede elegir el sentido de sus tiras
     const schedule=opts.schedule||[{guide:4,lbTerm:false}];
     const growth=opts.growth||2;
+    const beamDeadline=deadline;
     let stop=false;
     for(let B=1;B<=(opts.maxBeam||8192)&&!stop;B=Math.max(B+1,Math.floor(B*growth))){
       for(const sc of schedule){
-        if(best&&now()>deadline){stop=true;break}
-        const node=beam(P,B,best?deadline:Infinity,sc);
+        if(best&&now()>beamDeadline){stop=true;break}
+        const node=beam(P,B,best?beamDeadline:Infinity,sc);
         if(!node){stop=true;break}
         if(node.pruned)continue;
         consider(toSolution(P,node,prep),`haz ${B}`);

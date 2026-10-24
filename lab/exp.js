@@ -12,6 +12,8 @@ function testSet(){
   return Instances.suite(setName.split(":")[0],+(setName.split(":")[1]||20));
 }
 var STRATS={
+  def:{},
+  rec:{recombine:true},
   g4lns:{schedule:[{guide:4,lbTerm:false}],lnsShare:0.3},
   g4mix:{schedule:[{guide:4,lbTerm:false},{guide:0}],lns:false},
   svc:{svc:true,beamEnd:0,lns:false,svcEnd:1},
