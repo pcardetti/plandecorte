@@ -28,7 +28,12 @@ JSC=/System/Library/Frameworks/JavaScriptCore.framework/Versions/A/Helpers/jsc
 | Algoritmo anterior de la app | 7131 |
 | CHBP (Charalambous & Fleszar 2011) | 7064 |
 | SVCRG (2014) | 7035 |
-| **optimizer.js, 1 s por instancia** | **7032** |
+| **optimizer.js, 1 s por instancia** | **7034** (7032 en otra corrida) |
+| **optimizer.js, 5 s por instancia** | **7025** |
 | Mejor conocido (corridas largas, varios autores) | 6980 |
 
 80 proyectos de muebles reales con kerf y márgenes (`run.js -- "muebles:60,muebles-grandes:20" base,pro 1500`): 267 tableros con el algoritmo anterior y 257–259 con el nuevo (según la carga del equipo). El nuevo llega al mínimo teórico en 65 de 80 proyectos (el anterior en 57), es mejor en 76 y nunca peor.
+
+Robustez: 3.000 casos al azar con `fuzz.js` (kerf con decimales, márgenes, veta, giros forzados, máximo de tableros, piezas que no entran, piezas diminutas, cantidades de hasta 150) y todos los conjuntos anteriores: 0 planes inválidos.
+
+Lo que se probó y no mejoró con 1–2 s de tiempo (código en `experimental.js`): mejora por vaciado del tablero más vacío, corrección secuencial de valores (SVC), recombinación de tableros, otras guías y búsquedas separadas por sentido de tira.

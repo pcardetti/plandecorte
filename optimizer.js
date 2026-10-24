@@ -6,8 +6,9 @@
 // apiladas, con kerf, márgenes, veta y giros forzados. Cada tablero elige el sentido
 // de sus tiras. Compite con el método voraz anterior y gana el plan con menos
 // tableros y, a igualdad, el retazo más grande en el último tablero.
-// Resultado de referencia: 7032 tableros en las 500 instancias clásicas (clases I–X)
-// con 1 s por instancia, contra 7131 del método anterior (récord publicado: 6980).
+// Resultado de referencia (lab/official_run.js): 7034 tableros en las 500 instancias
+// clásicas (clases I–X) con 1 s por instancia y 7025 con 5 s, contra 7131 del método
+// anterior (CHBP 7064, SVCRG 7035, récord publicado 6980).
 (function(G){
 "use strict";
 const EPS=1e-7;
@@ -40,10 +41,12 @@ function prepare(pieces,cfg){
   return {uw,uh,types,unplaced};
 }
 
-// ---------- búsqueda en haz sobre planes de 3 etapas ----------
-// Espacio "V": las tiras son verticales (cortes de primera etapa paralelos al alto).
-// Estado del tablero abierto: x1p..x1c = tira actual; y2p..y2c = bloque actual;
-// x3c = fin de la última pieza del bloque.
+// ---------- búsqueda en haz sobre planes guillotina por etapas ----------
+// Las piezas se agregan de a una. Cada tablero tiene un "marco" (fr): con fr=0 las tiras
+// son verticales y con fr=1 horizontales (las coordenadas del marco van traspuestas).
+// Estado del tablero abierto, en su marco: x1p..x1c = tira actual; y2p..y2c = bloque
+// actual dentro de la tira; x3p..x3c = hueco actual dentro del bloque; y4c = tope de
+// las piezas apiladas en ese hueco. Un nivel del haz = misma cantidad de piezas puestas.
 function selectTop(idx,n,key,m){
   // deja en idx[0..m) los m menores según key (quickselect), sin ordenar
   let lo=0,hi=n-1;
