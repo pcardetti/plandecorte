@@ -61,7 +61,6 @@
     <h1>plan<span>de</span>corte</h1>
     <small>Optimizador de corte de tableros</small>
   </div>
-  <button type="button" class="hdr-manual" id="hdrManual" hidden>Plan modificado a mano</button>
 </header>
 <div class="layout">
 <aside aria-label="Datos del proyecto">
@@ -111,11 +110,6 @@
   </table>
   <div class="err" id="rows-err"></div>
   <button class="ghost" id="add">+ Añadir pieza</button>
-
-  <h2 id="csv-title">Importar CSV</h2>
-  <div class="hint" id="csv-hint">Formato: nombre,ancho,alto,cantidad[,veta][,canto] (una por línea). Veta: ancho o alto. Canto: lados con S, I, Z, D (superior, inferior, izquierdo, derecho) o T para todos.</div>
-  <textarea id="csv" rows="4" aria-labelledby="csv-title" aria-describedby="csv-hint" placeholder="Lateral,600,2100,2&#10;Puerta,400,700,4&#10;Estante,560,300,3"></textarea>
-  <button class="full" id="importBtn">Importar CSV</button>
 
   <details class="budget" id="budget">
     <summary><h2 id="budget-title">Presupuesto <small>(opcional)</small></h2></summary>

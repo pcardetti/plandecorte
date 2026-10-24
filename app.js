@@ -41,19 +41,6 @@ function edgeGlyph(e){
   const on=i=>e[i]==="1"?"on":"";
   return `<svg viewBox="0 0 40 28" aria-hidden="true"><rect x="3" y="3" width="34" height="22" rx="1"/><line class="${on(0)}" x1="3" y1="3" x2="37" y2="3"/><line class="${on(1)}" x1="3" y1="25" x2="37" y2="25"/><line class="${on(2)}" x1="3" y1="3" x2="3" y2="25"/><line class="${on(3)}" x1="37" y1="3" x2="37" y2="25"/></svg>`;
 }
-// Columna veta del CSV: alto/h/vertical/↕, ancho/w/horizontal/↔ (o si/1/v, como antes)
-function parseGrain(s){
-  s=String(s||"").trim().toLowerCase();
-  if(/^(h|alto|vertical|↕)$/.test(s))return "h";
-  if(/^(w|a|ancho|horizontal|↔|1|si|sí|true|v)$/.test(s))return "w";
-  return "";
-}
-// Texto del CSV de importación: "T" = todos, o letras S I Z D
-function parseEdges(s){
-  s=String(s||"").toUpperCase().replace(/\s+/g,"");
-  if(s==="T"||s==="TODOS"||s==="4")return "1111";
-  return SIDES.map(x=>s.includes(x.k)?"1":"0").join("");
-}
 let popBtn=null;
 function openEdgePop(btn){
   const pop=$("edgePop"), e=btn.dataset.e;
@@ -374,14 +361,14 @@ function duplicateProject(){
   applyState(db.items[db.current].data);renderProjSel();
   toast("Proyecto duplicado.");
 }
-// Vacía el proyecto abierto (piezas, giros a mano, resultado y CSV pegado);
+// Vacía el proyecto abierto (piezas, giros a mano y resultado);
 // conserva nombre, tablero, canto y precios. Se puede deshacer.
 // Pide confirmación en un panel junto al botón antes de vaciar el proyecto
 function openResetConfirm(){
   closeEdgePop(false);closeShare(false);hideTip();
   save();
   const st=state(), n=st.rows.length, m=manualCount();
-  if(!n&&!m&&!lastResult&&!$("csv").value.trim()){toast("El proyecto ya está vacío.");return}
+  if(!n&&!m&&!lastResult){toast("El proyecto ya está vacío.");return}
   const name=st.project.trim();
   const parts=[`${n} pieza${n===1?"":"s"}`];
   if(m)parts.push(girosTxt(m));
@@ -399,11 +386,11 @@ function closeResetConfirm(refocus=true){
 }
 function resetProject(){
   closeResetConfirm(false);
-  const before=state(), csv=$("csv").value;
-  applyState({...before,rows:[],manual:null});$("csv").value="";save();
+  const before=state();
+  applyState({...before,rows:[],manual:null});save();
   $("add").focus();
   toast("Proyecto reiniciado: se vaciaron las piezas, los giros y el resultado.",{timeout:9000,action:{label:"Deshacer",fn:()=>{
-    applyState(before);$("csv").value=csv;save();noteManual();
+    applyState(before);save();noteManual();
   }}});
 }
 function deleteProject(){
@@ -726,8 +713,6 @@ function render(r){
   });
   h+=`<div class="hint">Calculado en ${r.ms.toFixed(0)} ms · mejor estrategia: ${r.algo}</div>`;
   $("out").innerHTML=h;
-  $("hdrManual").hidden=!manualCount();
-  $("hdrManual").innerHTML=`${icon("alert")}Plan modificado a mano`;
   $("print").onclick=()=>window.print();
   $("exportCsv").onclick=exportCSV;
   $("lbl").onclick=()=>{showLabels=!showLabels;render(r);$("lbl").focus()};
@@ -862,7 +847,6 @@ $("out").addEventListener("keydown",e=>{
 });
 function showEmpty(){
   $("out").innerHTML=EMPTY_HTML;
-  $("hdrManual").hidden=true;
   $("emptyAdd").onclick=()=>{addAndFocus();$("pieces-title").scrollIntoView({behavior:"smooth"})};
 }
 const addAndFocus=()=>{addRow();save();$("rows").lastElementChild.querySelector(".n").focus()};
@@ -876,7 +860,6 @@ $("projDel").onclick=deleteProject;
 $("resetBtn").onclick=()=>$("resetPop").hidden?openResetConfirm():closeResetConfirm();
 $("resetCancel").onclick=()=>closeResetConfirm();
 $("resetYes").onclick=resetProject;
-$("hdrManual").onclick=()=>{const m=document.querySelector(".manual");if(m){m.scrollIntoView({behavior:"smooth",block:"start"});$("resetRot2")?.focus({preventScroll:true})}};
 $("resetBtn").insertAdjacentHTML("afterbegin",icon("reset"));
 $("shareBtn").onclick=()=>$("sharePop").hidden?openShare():closeShare();
 $("shareP").onchange=refreshShare;
@@ -887,20 +870,6 @@ $("shareNative").onclick=async()=>{
 };
 $("shareUrl").onfocus=e=>e.target.select();
 $("calc").onclick=calculate;
-$("importBtn").onclick=()=>{
-  const lines=$("csv").value.split(/\r?\n/).map(l=>l.trim()).filter(Boolean);
-  if(!lines.length){toast("Pegá al menos una línea en el cuadro de CSV.",{type:"error"});$("csv").focus();return}
-  let n=0;
-  for(const l of lines){
-    const c=l.split(/[;,\t]/).map(s=>s.trim());
-    if(c.length<3||!(+c[1]>0)||!(+c[2]>0))continue;
-    addRow({name:c[0],w:+c[1],h:+c[2],q:parseInt(c[3])||1,g:parseGrain(c[4]),e:parseEdges(c[5])});n++;
-  }
-  const skipped=lines.length-n;
-  if(!n){toast("No se encontró ninguna línea válida. Formato: nombre,ancho,alto,cantidad",{type:"error",timeout:7000});return}
-  $("csv").value="";save();validate();
-  toast(`Se importaron ${n} pieza${n===1?"":"s"}${skipped?` · ${skipped} línea${skipped===1?"":"s"} ignorada${skipped===1?"":"s"}`:""}.`,{type:skipped?"error":"info"});
-};
 ["project","bw","bh","kerf","margin","maxb","grain","ct","cx",...PRICES].forEach(id=>$(id).addEventListener("input",()=>{save();validate()}));
 document.addEventListener("keydown",e=>{
   if((e.ctrlKey||e.metaKey)&&e.key==="Enter"){e.preventDefault();closeEdgePop(false);calculate()}
