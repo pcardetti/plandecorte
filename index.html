@@ -65,7 +65,16 @@
 <div class="layout">
 <aside aria-label="Datos del proyecto">
   <h2 id="project-title">Proyecto</h2>
-  <input type="text" id="project" aria-labelledby="project-title" placeholder="Nombre del proyecto…" autocomplete="off">
+  <div class="projbar">
+    <label for="projSel" class="sr-only">Proyecto abierto</label>
+    <select id="projSel"></select>
+    <button type="button" class="icon" id="projNew" title="Nuevo proyecto" aria-label="Nuevo proyecto"></button>
+    <button type="button" class="icon" id="projDup" title="Duplicar proyecto" aria-label="Duplicar proyecto"></button>
+    <button type="button" class="icon" id="projDel" title="Eliminar proyecto" aria-label="Eliminar proyecto"></button>
+  </div>
+  <label for="project" class="sr-only">Nombre del proyecto</label>
+  <input type="text" id="project" placeholder="Nombre del proyecto…" autocomplete="off" maxlength="120">
+  <button type="button" class="full" id="shareBtn" aria-haspopup="dialog" aria-expanded="false" aria-controls="sharePop">Compartir por link</button>
 
   <h2 id="board-title">Tablero</h2>
   <fieldset class="box" aria-labelledby="board-title">
@@ -140,6 +149,14 @@
     <label class="pop-side inf"><input type="checkbox" data-i="1"> Inferior</label>
   </div>
   <div class="pop-actions"><button type="button" id="edgeAll">Todos</button><button type="button" id="edgeNone">Ninguno</button><button type="button" class="ok" id="edgeOk">Listo</button></div>
+</div>
+<div class="pop share" id="sharePop" role="dialog" aria-modal="false" aria-labelledby="sharePop-title" hidden>
+  <div class="pop-title" id="sharePop-title">Compartir por link</div>
+  <label class="toggle" style="margin-top:0"><input type="checkbox" id="shareP"> Incluir precios y ganancia</label>
+  <label for="shareUrl" class="sr-only">Link para compartir</label>
+  <input type="text" id="shareUrl" readonly>
+  <div class="hint">El link lleva el proyecto adentro: no se guarda en ningún servidor. Quien lo abra recibe una copia.</div>
+  <div class="pop-actions"><button type="button" class="ok" id="shareCopy">Copiar link</button><button type="button" id="shareNative" hidden>Enviar…</button><button type="button" id="shareClose">Cerrar</button></div>
 </div>
 <div class="toasts" id="toasts" role="status" aria-live="polite"></div>
 

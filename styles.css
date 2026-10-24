@@ -22,6 +22,7 @@
   --toast-bg:#ece7dc; --toast-ink:#1d1b18;
 }
 *{box-sizing:border-box}
+[hidden]{display:none!important}
 body{margin:0;background:var(--bg);color:var(--ink);font:14px/1.45 ui-sans-serif,system-ui,-apple-system,"Segoe UI",sans-serif}
 .sr-only{position:absolute;width:1px;height:1px;padding:0;margin:-1px;overflow:hidden;clip:rect(0,0,0,0);white-space:nowrap;border:0}
 .skip{position:absolute;left:8px;top:-40px;z-index:10;background:var(--accent);color:var(--accent-ink);padding:8px 12px;border-radius:6px;text-decoration:none;font-weight:600}
@@ -157,3 +158,12 @@ details.budget summary:focus-visible{outline:2px solid var(--focus);outline-offs
 .quote td.d{color:var(--muted);font-size:12px}
 .quote tr.sub td{font-weight:600}
 .quote tr.total td{font:700 18px ui-monospace,Menlo,monospace;border-bottom:none;padding-top:10px}
+
+/* proyectos */
+.projbar{display:flex;gap:6px;margin-bottom:8px}
+.projbar select{flex:1;min-width:0;padding:7px 9px;border:1px solid var(--line);border-radius:6px;background:var(--bg);color:var(--ink);font:13px ui-monospace,Menlo,monospace}
+.projbar select:focus-visible{outline:2px solid var(--focus);outline-offset:-1px}
+button.icon{padding:6px 8px;flex:none}
+#shareBtn svg{margin-right:2px}
+.pop.share{width:300px}
+.pop.share input[type=text]{margin-top:10px;font-size:11px;color:var(--muted)}

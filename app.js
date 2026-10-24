@@ -7,6 +7,10 @@ const ICONS={
   download:'<path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><path d="m7 10 5 5 5-5"/><path d="M12 15V3"/>',
   ruler:'<path d="M21.3 15.3a2.4 2.4 0 0 1 0 3.4l-2.6 2.6a2.4 2.4 0 0 1-3.4 0L2.7 8.7a2.4 2.4 0 0 1 0-3.4l2.6-2.6a2.4 2.4 0 0 1 3.4 0Z"/><path d="m7.5 10.5 2-2M10.5 13.5l2-2M13.5 16.5l2-2"/>',
   edit:'<path d="M12 20h9"/><path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4Z"/>',
+  plus:'<path d="M12 5v14M5 12h14"/>',
+  copy:'<rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/>',
+  trash:'<path d="M3 6h18"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6"/><path d="M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/>',
+  share:'<circle cx="18" cy="5" r="3"/><circle cx="6" cy="12" r="3"/><circle cx="18" cy="19" r="3"/><path d="m8.6 13.5 6.8 4M15.4 6.5l-6.8 4"/>',
 };
 const icon=k=>`<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${ICONS[k]}</svg>`;
 const isMobile=()=>matchMedia("(max-width:860px)").matches;
@@ -34,14 +38,17 @@ function openEdgePop(btn){
   pop.querySelectorAll("input").forEach(c=>c.checked=e[+c.dataset.i]==="1");
   syncPopGlyph();
   pop.hidden=false;
-  positionPop();
+  placePop(pop,btn);
   btn.setAttribute("aria-expanded","true");
   pop.querySelector("input").focus({preventScroll:true});
 }
 function positionPop(){
-  const pop=$("edgePop");
-  if(!popBtn||pop.hidden)return;
-  const r=popBtn.getBoundingClientRect(), pw=pop.offsetWidth, ph=pop.offsetHeight;
+  if(popBtn&&!$("edgePop").hidden)placePop($("edgePop"),popBtn);
+  if(!$("sharePop").hidden)placePop($("sharePop"),$("shareBtn"));
+}
+// Ubica un panel flotante pegado al botón que lo abrió, sin salirse de la pantalla
+function placePop(pop,btn){
+  const r=btn.getBoundingClientRect(), pw=pop.offsetWidth, ph=pop.offsetHeight;
   const left=Math.min(Math.max(8,r.right-pw),innerWidth-pw-8);
   const top=r.bottom+6+ph>innerHeight?Math.max(8,r.top-ph-6):r.bottom+6;
   pop.style.left=left+"px";pop.style.top=top+"px";
@@ -228,20 +235,196 @@ function readCfg(){
     ct:Math.max(0,+$("ct").value||0),cx:Math.max(0,+$("cx").value||0),
     price:Object.fromEntries(PRICES.map(k=>[k,Math.max(0,+$(k).value||0)]))};
 }
+// ---------- proyectos ----------
+// Todos los proyectos viven en este navegador:
+// {current, order:[ids], items:{id:{name,created,updated,data}}}
+const PSTORE="plandecorte:projects:v1";
+const CFG_KEYS=["bw","bh","kerf","margin","maxb","ct","cx",...PRICES];
+const DEFAULTS={bw:"2800",bh:"2070",kerf:"4",margin:"0",maxb:"",ct:"0",cx:"0",pb:"",pe:"",pc:"",po:"",pg:""};
+let db=null, storageWarned=false;
+const newId=()=>Date.now().toString(36)+Math.random().toString(36).slice(2,7);
+function state(){
+  return {project:$("project").value,
+    cfg:{...Object.fromEntries(CFG_KEYS.map(k=>[k,$(k).value])),grain:$("grain").checked},
+    rows:[...$("rows").children].map(rowData)};
+}
+// Limpia datos que vienen del almacenamiento o de un link compartido
+function sanitize(s){
+  if(!s||typeof s!=="object")s={};
+  const str=(v,n)=>String(v??"").slice(0,n);
+  const cfg=s.cfg&&typeof s.cfg==="object"?s.cfg:{};
+  return {
+    project:str(s.project,120),
+    cfg:{...Object.fromEntries(CFG_KEYS.map(k=>[k,cfg[k]==null?DEFAULTS[k]:str(cfg[k],16)])),grain:!!cfg.grain},
+    rows:(Array.isArray(s.rows)?s.rows:[]).slice(0,500).filter(r=>r&&typeof r==="object")
+      .map(r=>({name:str(r.name,80),w:str(r.w,12),h:str(r.h,12),q:str(r.q??1,6),g:!!r.g,e:normEdges(r.e)}))
+  };
+}
+function applyState(s){
+  s=sanitize(s);
+  closeEdgePop(false);
+  $("project").value=s.project;
+  for(const k of CFG_KEYS)$(k).value=s.cfg[k];
+  $("grain").checked=s.cfg.grain;
+  $("budget").open=PRICES.some(k=>+s.cfg[k]>0);
+  $("rows").innerHTML="";
+  s.rows.forEach(r=>addRow(r));
+  attempted=false;lastResult=null;showEmpty();validate();
+}
+function persist(){
+  try{localStorage.setItem(PSTORE,JSON.stringify(db))}
+  catch(e){if(!storageWarned){storageWarned=true;toast("No se pudo guardar en este navegador (¿modo privado o sin espacio?).",{type:"error",timeout:8000})}}
+}
 function save(){
-  try{localStorage.setItem(STORE,JSON.stringify({project:$("project").value,cfg:{bw:$("bw").value,bh:$("bh").value,kerf:$("kerf").value,margin:$("margin").value,maxb:$("maxb").value,grain:$("grain").checked,ct:$("ct").value,cx:$("cx").value,...Object.fromEntries(PRICES.map(k=>[k,$(k).value]))},
-    rows:[...$("rows").children].map(rowData)}))}catch(e){}
+  const p=db.items[db.current];
+  p.data=state();p.name=p.data.project.trim();p.updated=Date.now();
+  persist();renderProjSel();
+}
+function createProject(data){
+  const id=newId(), now=Date.now();
+  data=sanitize(data);
+  db.items[id]={name:data.project.trim(),created:now,updated:now,data};
+  db.order.push(id);db.current=id;persist();
+  return id;
 }
 function load(){
-  let s=null;try{s=JSON.parse(localStorage.getItem(STORE))}catch(e){}
-  if(s&&typeof s==="object"){
-    const cfg=s.cfg||{};
-    $("project").value=s.project||"";
-    for(const k of ["bw","bh","kerf","margin","maxb","ct","cx",...PRICES])if(cfg[k]!=null)$(k).value=cfg[k];
-    if(PRICES.some(k=>+cfg[k]>0))$("budget").open=true;
-    $("grain").checked=!!cfg.grain;
-    if(Array.isArray(s.rows))s.rows.forEach(r=>addRow({name:"",w:"",h:"",q:1,g:false,e:"0000",...r}));
+  try{db=JSON.parse(localStorage.getItem(PSTORE))}catch(e){db=null}
+  if(!db||typeof db!=="object"||!db.items||typeof db.items!=="object"||!Array.isArray(db.order))db=null;
+  else db.order=db.order.filter(id=>db.items[id]&&typeof db.items[id]==="object");
+  if(!db||!db.order.length){
+    // primera vez: traer el proyecto único de la versión anterior, si existe
+    let old=null;try{old=JSON.parse(localStorage.getItem(STORE))}catch(e){}
+    db={current:null,order:[],items:{}};
+    createProject(old||state());
   }
+  if(!db.items[db.current])db.current=db.order[0];
+  applyState(db.items[db.current].data);renderProjSel();
+}
+function renderProjSel(){
+  const sel=$("projSel");
+  sel.innerHTML=db.order.map((id,i)=>`<option value="${id}">${esc(db.items[id].name||`Sin nombre (${i+1})`)}</option>`).join("");
+  sel.value=db.current;
+}
+function switchProject(id){
+  if(id===db.current||!db.items[id])return;
+  save();db.current=id;persist();
+  applyState(db.items[id].data);renderProjSel();
+}
+function newProject(){
+  save();
+  // el proyecto nuevo conserva tablero, canto y precios; empieza sin piezas
+  createProject({...state(),project:"",rows:[]});
+  applyState(db.items[db.current].data);renderProjSel();
+  $("project").focus();
+  toast("Proyecto nuevo: conserva el tablero, el canto y los precios.");
+}
+function duplicateProject(){
+  save();
+  const s=state();
+  createProject({...s,project:`${s.project.trim()||"Proyecto"} (copia)`});
+  applyState(db.items[db.current].data);renderProjSel();
+  toast("Proyecto duplicado.");
+}
+function deleteProject(){
+  const id=db.current, item=db.items[id], idx=db.order.indexOf(id);
+  save();
+  delete db.items[id];db.order.splice(idx,1);
+  if(!db.order.length)createProject({...state(),project:"",rows:[]});
+  else db.current=db.order[Math.min(idx,db.order.length-1)];
+  persist();applyState(db.items[db.current].data);renderProjSel();
+  $("projSel").focus();
+  toast(`«${item.name||"Sin nombre"}» eliminado`,{timeout:8000,action:{label:"Deshacer",fn:()=>{
+    save();db.items[id]=item;db.order.splice(Math.min(idx,db.order.length),0,id);db.current=id;
+    persist();applyState(item.data);renderProjSel();
+  }}});
+}
+
+// ---------- compartir por link ----------
+// El proyecto viaja comprimido en el #hash: nunca llega al servidor.
+const SHARE_MAX=60000;
+function b64enc(u8){let s="";for(let i=0;i<u8.length;i+=0x8000)s+=String.fromCharCode(...u8.subarray(i,i+0x8000));return btoa(s).replace(/\+/g,"-").replace(/\//g,"_").replace(/=+$/,"")}
+function b64dec(s){return Uint8Array.from(atob(s.replace(/-/g,"+").replace(/_/g,"/")),c=>c.charCodeAt(0))}
+// Pasa bytes por un (de)compresor cortando si el resultado supera el límite
+async function pipe(u8,ts,limit=2e6){
+  const r=new Blob([u8]).stream().pipeThrough(ts).getReader(), parts=[];let n=0;
+  for(;;){
+    const {done,value}=await r.read();if(done)break;
+    n+=value.length;if(n>limit){r.cancel();throw new Error("demasiado grande")}
+    parts.push(value);
+  }
+  const out=new Uint8Array(n);let o=0;for(const p of parts){out.set(p,o);o+=p.length}
+  return out;
+}
+async function encodeShare(obj){
+  const raw=new TextEncoder().encode(JSON.stringify(obj));
+  if("CompressionStream" in window)return "z"+b64enc(await pipe(raw,new CompressionStream("deflate-raw")));
+  return "j"+b64enc(raw);
+}
+async function decodeShare(code){
+  const bytes=b64dec(code.slice(1));
+  const raw=code[0]==="z"?await pipe(bytes,new DecompressionStream("deflate-raw")):code[0]==="j"?bytes:null;
+  if(!raw||raw.length>2e6)throw new Error("formato");
+  return JSON.parse(new TextDecoder().decode(raw));
+}
+async function shareUrl(){
+  const s=sanitize(state());
+  if(!$("shareP").checked)for(const k of PRICES)s.cfg[k]="";
+  const url=`${location.origin}${location.pathname}#p=${await encodeShare(s)}`;
+  if(url.length>SHARE_MAX)throw new Error("largo");
+  return url;
+}
+async function refreshShare(){
+  try{$("shareUrl").value=await shareUrl();$("shareCopy").disabled=false}
+  catch(e){$("shareUrl").value="";$("shareCopy").disabled=true;toast("El proyecto es demasiado grande para compartirlo por link.",{type:"error"})}
+}
+function openShare(){
+  save();
+  const pop=$("sharePop");pop.hidden=false;
+  $("shareBtn").setAttribute("aria-expanded","true");
+  $("shareNative").hidden=!navigator.share;
+  placePop(pop,$("shareBtn"));
+  refreshShare();
+  $("shareCopy").focus({preventScroll:true});
+}
+function closeShare(refocus=true){
+  if($("sharePop").hidden)return;
+  $("sharePop").hidden=true;$("shareBtn").setAttribute("aria-expanded","false");
+  if(refocus)$("shareBtn").focus();
+}
+async function copyShare(){
+  const url=$("shareUrl").value;if(!url)return;
+  let ok=false;
+  try{await navigator.clipboard.writeText(url);ok=true}
+  catch(e){
+    // navegadores sin permiso de portapapeles: método clásico con el texto seleccionado
+    $("shareUrl").focus();$("shareUrl").select();
+    try{ok=document.execCommand("copy")}catch(e2){}
+  }
+  if(ok)toast("Link copiado. Pegalo donde quieras compartirlo.");
+  else toast("No se pudo copiar solo: el link quedó seleccionado para copiarlo a mano.",{type:"error"});
+}
+async function openShared(){
+  if(!location.hash.startsWith("#p="))return;
+  const code=location.hash.slice(3);
+  history.replaceState(null,"",location.pathname+location.search);
+  if(!/^[zj][A-Za-z0-9_-]{1,60000}$/.test(code)){toast("El link compartido no es válido.",{type:"error"});return}
+  try{
+    const data=sanitize(await decodeShare(code)), json=JSON.stringify(data);
+    save();
+    // si ya se abrió este mismo link antes, no duplicar el proyecto
+    const dup=db.order.find(id=>JSON.stringify(sanitize(db.items[id].data))===json);
+    if(dup){db.current=dup;persist()}
+    else{
+      // quien abre el link por primera vez tiene un único proyecto vacío: reemplazarlo
+      const cur=db.items[db.current].data, blank=db.order.length===1&&!cur.project.trim()&&!cur.rows.length;
+      const old=db.current;
+      createProject(data);
+      if(blank){delete db.items[old];db.order=db.order.filter(id=>id!==old);persist()}
+    }
+    applyState(db.items[db.current].data);renderProjSel();
+    toast(dup?`«${data.project||"Plan compartido"}» ya estaba en tus proyectos.`:`Abriste «${data.project||"un plan compartido"}». Quedó guardado en tus proyectos.`,{timeout:7000});
+    if(readPieces().length)calculate();
+  }catch(e){toast("No se pudo abrir el link compartido: está incompleto o dañado.",{type:"error",timeout:7000})}
 }
 
 // ---------- algoritmo: FFD + guillotina ----------
@@ -490,9 +673,27 @@ function exportCSV(){
 }
 
 // ---------- eventos ----------
+const EMPTY_HTML=$("out").innerHTML;
+function showEmpty(){
+  $("out").innerHTML=EMPTY_HTML;
+  $("emptyAdd").onclick=()=>{addAndFocus();$("pieces-title").scrollIntoView({behavior:"smooth"})};
+}
 const addAndFocus=()=>{addRow();save();$("rows").lastElementChild.querySelector(".n").focus()};
 $("add").onclick=addAndFocus;
-$("emptyAdd").onclick=()=>{addAndFocus();$("pieces-title").scrollIntoView({behavior:"smooth"})};
+$("projNew").innerHTML=icon("plus");$("projDup").innerHTML=icon("copy");$("projDel").innerHTML=icon("trash");
+$("shareBtn").insertAdjacentHTML("afterbegin",icon("share"));
+$("projSel").onchange=e=>switchProject(e.target.value);
+$("projNew").onclick=newProject;
+$("projDup").onclick=duplicateProject;
+$("projDel").onclick=deleteProject;
+$("shareBtn").onclick=()=>$("sharePop").hidden?openShare():closeShare();
+$("shareP").onchange=refreshShare;
+$("shareCopy").onclick=copyShare;
+$("shareClose").onclick=()=>closeShare();
+$("shareNative").onclick=async()=>{
+  try{await navigator.share({title:$("project").value||"Plan de corte",url:$("shareUrl").value})}catch(e){}
+};
+$("shareUrl").onfocus=e=>e.target.select();
 $("calc").onclick=calculate;
 $("importBtn").onclick=()=>{
   const lines=$("csv").value.split(/\r?\n/).map(l=>l.trim()).filter(Boolean);
@@ -512,15 +713,21 @@ $("importBtn").onclick=()=>{
 document.addEventListener("keydown",e=>{
   if((e.ctrlKey||e.metaKey)&&e.key==="Enter"){e.preventDefault();closeEdgePop(false);calculate()}
   else if(e.key==="Escape"&&!$("edgePop").hidden){e.preventDefault();closeEdgePop()}
+  else if(e.key==="Escape"&&!$("sharePop").hidden){e.preventDefault();closeShare()}
 });
 $("edgePop").addEventListener("change",()=>{syncPopGlyph();applyPop()});
 $("edgeAll").onclick=()=>{$("edgePop").querySelectorAll("input").forEach(c=>c.checked=true);syncPopGlyph();applyPop()};
 $("edgeNone").onclick=()=>{$("edgePop").querySelectorAll("input").forEach(c=>c.checked=false);syncPopGlyph();applyPop()};
 $("edgeOk").onclick=()=>closeEdgePop();
 // cerrar al tocar fuera o al pasar el foco a otro lado
-document.addEventListener("pointerdown",e=>{if(popBtn&&!$("edgePop").contains(e.target)&&!popBtn.contains(e.target))closeEdgePop(false)});
+document.addEventListener("pointerdown",e=>{
+  if(popBtn&&!$("edgePop").contains(e.target)&&!popBtn.contains(e.target))closeEdgePop(false);
+  if(!$("sharePop").hidden&&!$("sharePop").contains(e.target)&&!$("shareBtn").contains(e.target))closeShare(false);
+});
 $("edgePop").addEventListener("focusout",e=>{if(popBtn&&e.relatedTarget&&!$("edgePop").contains(e.relatedTarget)&&e.relatedTarget!==popBtn)closeEdgePop(false)});
 // seguir al botón al hacer scroll o cuando el celular cambia el alto de la pantalla
 addEventListener("resize",positionPop);
 addEventListener("scroll",positionPop,{passive:true,capture:true});
-load();validate();
+load();
+openShared();
+addEventListener("hashchange",openShared);
